@@ -1,3 +1,38 @@
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- Storage bucket for temporary OCR uploads (auto-deleted by scan/ocr function)
+-- ───────────────────────────────────────────────────────────────────────────
+insert into storage.buckets (id, name, public)
+values ('ocr-temp', 'ocr-temp', false)
+on conflict (id) do nothing;
+
+drop policy if exists "ocr_temp_insert_own" on storage.objects;
+drop policy if exists "ocr_temp_delete_own" on storage.objects;
+
+create policy "ocr_temp_insert_own" on storage.objects
+  for insert with check (
+    bucket_id = 'ocr-temp' and (storage.foldername(name))[1] = auth.uid()::text
+  );
+create policy "ocr_temp_delete_own" on storage.objects
+  for delete using (
+    bucket_id = 'ocr-temp' and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- Subscriptions
+-- ───────────────────────────────────────────────────────────────────────────
+
+create table if not exists public.user_subscriptions (
+  user_id          uuid primary key references auth.users (id) on delete cascade,
+  tier             text not null default 'free',
+  payment_provider text,
+  expires_at       timestamptz,
+  auto_renew       boolean not null default false,
+  phone_number     text,
+  country_code     text,
+  provider_ref     text,
+  updated_at       timestamptz not null default now()
+);
 -- ReceiptIQ — Supabase schema
 -- Run this in the Supabase SQL Editor (Dashboard -> SQL -> New query -> paste -> Run).
 -- Safe to re-run: uses IF NOT EXISTS / CREATE OR REPLACE where possible.
@@ -110,3 +145,30 @@ create policy "receipts_delete_own" on storage.objects
   for delete using (
     bucket_id = 'receipts' and (storage.foldername(name))[1] = auth.uid()::text
   );
+
+create table if not exists public.payment_transactions (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users (id) on delete cascade,
+  amount       numeric not null,
+  currency     text not null,
+  provider     text not null,
+  status       text not null default 'pending',
+  tier         text not null,
+  provider_ref text,
+  metadata     jsonb,
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists payment_tx_user_idx on public.payment_transactions (user_id, created_at desc);
+
+alter table public.user_subscriptions    enable row level security;
+alter table public.payment_transactions  enable row level security;
+
+drop policy if exists "owner_all_user_subscriptions"   on public.user_subscriptions;
+drop policy if exists "owner_all_payment_transactions" on public.payment_transactions;
+
+create policy "owner_all_user_subscriptions" on public.user_subscriptions
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+create policy "owner_all_payment_transactions" on public.payment_transactions
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());

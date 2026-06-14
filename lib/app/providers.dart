@@ -13,19 +13,29 @@ import '../data/repositories/repository.dart';
 import '../data/repositories/supabase_receipt_repository.dart';
 import '../features/dashboard/analytics.dart';
 
-/// Repository + services (singletons).
+/// Emits the current Supabase [User] whenever auth state changes.
+/// Stays null when Supabase is not configured or user is not signed in.
+final _authUserProvider = StreamProvider<User?>((ref) {
+  if (!Env.hasSupabase) return Stream.value(null);
+  try {
+    return Supabase.instance.client.auth.onAuthStateChange
+        .map((event) => event.session?.user);
+  } catch (_) {
+    return Stream.value(null);
+  }
+});
+
+/// Repository + services.
 ///
-/// Uses Supabase when configured and a session exists, otherwise the local
-/// shared_preferences store (offline-friendly default).
+/// Watches [_authUserProvider] so it re-evaluates the moment the user signs
+/// in and switches transparently from local → Supabase storage.
 final repositoryProvider = Provider<ReceiptRepository>((ref) {
   if (Env.hasSupabase) {
-    try {
-      final client = Supabase.instance.client;
-      if (client.auth.currentUser != null) {
-        return SupabaseReceiptRepository(client);
-      }
-    } catch (_) {
-      // Supabase not initialised; fall through to local.
+    final user = ref.watch(_authUserProvider).valueOrNull;
+    if (user != null) {
+      try {
+        return SupabaseReceiptRepository(Supabase.instance.client);
+      } catch (_) {}
     }
   }
   return LocalReceiptRepository();

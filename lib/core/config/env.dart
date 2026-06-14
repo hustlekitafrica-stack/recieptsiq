@@ -8,15 +8,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class Env {
   static String _get(String key) => dotenv.maybeGet(key)?.trim() ?? '';
 
-  static String get supabaseUrl => _get('SUPABASE_URL');
+  static String get supabaseUrl     => _get('SUPABASE_URL');
   static String get supabaseAnonKey => _get('SUPABASE_ANON_KEY');
-  static String get googleVisionApiKey => _get('GOOGLE_VISION_API_KEY');
-  static String get openAiApiKey => _get('OPENAI_API_KEY');
-
-  static String get openAiModel {
-    final m = _get('OPENAI_MODEL');
-    return m.isEmpty ? 'gpt-4o-mini' : m;
-  }
 
   static String get defaultCurrency {
     final c = _get('DEFAULT_CURRENCY');
@@ -25,9 +18,13 @@ class Env {
 
   static bool get hasSupabase =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
-  static bool get hasVision => googleVisionApiKey.isNotEmpty;
-  static bool get hasOpenAi => openAiApiKey.isNotEmpty;
 
-  /// True when the full scan pipeline (OCR + extraction) can run for real.
-  static bool get canScanForReal => hasVision && hasOpenAi;
+  /// True when the full scan pipeline can run.
+  /// OCR and AI extraction are handled by Supabase Edge Functions,
+  /// so only a Supabase connection (and a signed-in user) is required.
+  static bool get canScanForReal => hasSupabase;
+
+  /// RevenueCat Google/Android API key (publishable — safe in binary).
+  static String get revenueCatGoogleKey => _get('REVENUECAT_GOOGLE_KEY');
+  static bool get hasRevenueCat => revenueCatGoogleKey.isNotEmpty;
 }

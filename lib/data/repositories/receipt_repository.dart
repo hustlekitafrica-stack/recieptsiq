@@ -92,6 +92,17 @@ class LocalReceiptRepository implements ReceiptRepository {
     await prefs.setString(_budgetsKey, raw);
   }
 
+  // ---- Data management ----
+
+  /// Wipes all locally stored receipts, budgets, and the seed flag so the
+  /// next call to [loadReceipts] starts with a clean slate.
+  static Future<void> clearAllData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_receiptsKey);
+    await prefs.remove(_budgetsKey);
+    await prefs.remove(_seededKey);
+  }
+
   // ---- Seed sample data on first launch so the app isn't empty ----
 
   Future<void> _maybeSeed(SharedPreferences prefs) async {

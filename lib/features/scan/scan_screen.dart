@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../app/providers.dart';
+import '../../app/subscription_provider.dart';
 import '../../core/config/env.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/receipt_draft.dart';
@@ -23,8 +24,31 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
   bool _busy = false;
   String _status = '';
 
+  // ── Scan limit gate ───────────────────────────────────────────────────────
+  bool _checkScanLimit() {
+    final canScan = ref.read(canScanProvider);
+    if (!canScan) {
+      final caps = ref.read(tierCapabilitiesProvider);
+      final used = ref.read(scansThisMonthProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Scan limit reached ($used / ${caps.maxScansPerMonth} this month). Upgrade to scan more.',
+          ),
+          action: SnackBarAction(
+            label: 'Upgrade',
+            onPressed: () => context.push('/paywall'),
+          ),
+        ),
+      );
+      return false;
+    }
+    return true;
+  }
+
   // ── Document scanner (CamScanner-style) ──────────────────────────────────
   Future<void> _scanDocument() async {
+    if (!_checkScanLimit()) return;
     try {
       final pictures = await CunningDocumentScanner.getPictures(
         noOfPages: 1,
@@ -42,6 +66,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
 
   // ── Gallery fallback ──────────────────────────────────────────────────────
   Future<void> _pickFromGallery() async {
+    if (!_checkScanLimit()) return;
     final XFile? file = await _picker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 90,
@@ -74,6 +99,9 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
       final draft = await extractor.extract(text, fallbackCurrency: currency);
       draft.imagePath = image.path;
 
+      // Record successful scan against the usage counter.
+      await ref.read(usageServiceProvider)?.recordScan();
+
       if (!mounted) return;
       setState(() => _busy = false);
       context.pushReplacement('/review', extra: draft);
@@ -90,10 +118,11 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('AI keys not set'),
+        title: const Text('Cloud scan not available'),
         content: const Text(
-          'Add your Google Vision and OpenAI keys to the .env file to scan '
-          'automatically. You can still enter this receipt manually now.',
+          'Scanning requires a Supabase connection. '
+          'Add SUPABASE_URL and SUPABASE_ANON_KEY to your .env file, '
+          'or enter this receipt manually now.',
         ),
         actions: [
           TextButton(

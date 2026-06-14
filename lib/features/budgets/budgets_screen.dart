@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/providers.dart';
+import '../../app/subscription_provider.dart';
 import '../../core/money.dart';
 import '../../data/models/budget.dart';
 import '../../data/models/category.dart';
@@ -129,6 +131,25 @@ class BudgetsScreen extends ConsumerWidget {
 
   Future<void> _editBudget(BuildContext context, WidgetRef ref,
       String currency, Budget? existing) async {
+    // Enforce tier budget limit only when adding a new budget.
+    if (existing == null) {
+      final caps = ref.read(tierCapabilitiesProvider);
+      final currentCount = ref.read(budgetsProvider).length;
+      if (!caps.isUnlimitedBudgets && currentCount >= caps.maxBudgets) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Budget limit reached ($currentCount / ${caps.maxBudgets}). Upgrade to add more.',
+            ),
+            action: SnackBarAction(
+              label: 'Upgrade',
+              onPressed: () => context.push('/paywall'),
+            ),
+          ),
+        );
+        return;
+      }
+    }
     final controller = TextEditingController(
         text: existing == null ? '' : existing.limit.toStringAsFixed(0));
     var category = existing?.category ?? ExpenseCategory.groceries;

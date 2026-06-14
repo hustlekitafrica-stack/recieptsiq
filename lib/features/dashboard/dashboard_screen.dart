@@ -2,23 +2,151 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../app/providers.dart';
+import '../../app/subscription_provider.dart';
+import '../../core/config/env.dart';
+import '../../data/repositories/receipt_repository.dart';
 import '../../core/money.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/category.dart';
 import '../../data/models/monthly_review.dart';
 import '../../data/models/receipt.dart';
+import '../../data/models/subscription_tier.dart';
+import '../../features/paywall/upgrade_gate.dart';
 import 'analytics.dart';
 import 'insights.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
+  static void _showAccountSheet(BuildContext context, WidgetRef ref) {
+    final user = Supabase.instance.client.auth.currentUser;
+    final isAnon = user == null || user.isAnonymous;
+    final devProMode = !Env.hasRevenueCat;
+    final display = user?.email ?? user?.phone ?? 'Guest account';
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: AppTheme.brand.withValues(alpha: 0.12),
+                child: Icon(
+                  isAnon ? Icons.person_outline : Icons.person,
+                  color: AppTheme.brand,
+                  size: 30,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(display,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              const SizedBox(height: 4),
+              Text(
+                isAnon ? 'Anonymous session — data stays on this device' : 'Signed in',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+              ),
+              if (devProMode) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.brand.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppTheme.brand.withValues(alpha: 0.3)),
+                  ),
+                  child: const Text(
+                    '✓ Pro — all features unlocked (pre-launch mode)',
+                    style: TextStyle(color: AppTheme.brand, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+              if (isAnon) ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonal(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      context.push('/auth');
+                    },
+                    child: const Text('Create an account'),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await Supabase.instance.client.auth.signOut();
+                    if (context.mounted) context.go('/auth');
+                  },
+                  child: const Text('Sign out',
+                      style: TextStyle(color: Color(0xFFDC2626))),
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (d) => AlertDialog(
+                        title: const Text('Clear all data?'),
+                        content: const Text(
+                            'Removes all receipts, budgets, and scan history '
+                            'from this device. Cloud data (if any) is unaffected.\n\nThis cannot be undone.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(d, false),
+                            child: const Text('Cancel'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(d, true),
+                            style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFFDC2626)),
+                            child: const Text('Clear'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed != true || !context.mounted) return;
+                    await LocalReceiptRepository.clearAllData();
+                    await ref.read(usageServiceProvider)?.clearAll();
+                    ref.invalidate(receiptsProvider);
+                    ref.invalidate(budgetsProvider);
+                  },
+                  child: const Text('Clear all data',
+                      style: TextStyle(color: Color(0xFFEA580C))),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currency = ref.watch(displayCurrencyProvider);
     final receiptsAsync = ref.watch(receiptsProvider);
     final reviewAsync = ref.watch(monthlyReviewProvider);
+    final caps = ref.watch(tierCapabilitiesProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -27,6 +155,10 @@ class DashboardScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => ref.read(receiptsProvider.notifier).load(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.account_circle_outlined),
+            onPressed: () => _showAccountSheet(context, ref),
           ),
         ],
       ),
@@ -40,7 +172,13 @@ class DashboardScreen extends ConsumerWidget {
             children: [
               _MonthlyHero(amount: a.monthlySpend, currency: currency, trend: a.trendPercent),
               const SizedBox(height: 16),
-              _AiReviewCard(reviewAsync: reviewAsync),
+              caps.aiMonthlyReview
+                  ? _AiReviewCard(reviewAsync: reviewAsync)
+                  : const UpgradeGate(
+                      requiredTier: SubscriptionTier.starter,
+                      featureName: 'AI Monthly Review',
+                      child: SizedBox.shrink(),
+                    ),
               const SizedBox(height: 16),
               _StatRow(analytics: a, currency: currency),
               const SizedBox(height: 16),

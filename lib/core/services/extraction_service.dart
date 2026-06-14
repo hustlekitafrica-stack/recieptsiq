@@ -1,6 +1,4 @@
-import 'dart:convert';
-
-import 'package:dio/dio.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/env.dart';
 import '../money.dart';
@@ -17,169 +15,82 @@ class ExtractionException implements Exception {
   String toString() => 'ExtractionException: $message';
 }
 
-/// Turns raw receipt OCR text into structured data using an OpenAI model.
-///
-/// Uses JSON-mode for reliable, cheap, schema-shaped output.
+/// Turns raw OCR text into structured receipt data via the [scan/extract]
+/// Supabase Edge Function, and generates monthly AI reviews via
+/// [scan/monthly-review]. All API keys live server-side.
 class ExtractionService {
-  final Dio _dio;
-  ExtractionService([Dio? dio]) : _dio = dio ?? Dio();
+  SupabaseClient get _sb => Supabase.instance.client;
 
-  static const _endpoint = 'https://api.openai.com/v1/chat/completions';
-
-  static const _categories =
-      'groceries, fuel, rent, utilities, transport, entertainment, '
-      'businessSupplies, staffExpenses, school, medical, other';
-
-  String _systemPrompt(String fallbackCurrency) => '''
-You are an expert at reading shopping/business receipts and returning STRICT JSON.
-Extract the fields below from the receipt text. Respond with ONLY a JSON object, no prose.
-
-Schema:
-{
-  "merchant": string,           // store/business name
-  "date": string,               // ISO 8601 date (YYYY-MM-DD), best guess from receipt
-  "total": number,              // grand total amount
-  "vat": number|null,           // tax/VAT amount if present, else null
-  "currency": string,           // ISO 4217 code (e.g. KES, USD, NGN). Default "$fallbackCurrency" if unknown
-  "category": string,           // one of: $_categories
-  "items": [
-    { "name": string, "quantity": number, "unit_price": number, "amount": number }
-  ]
-}
-
-Rules:
-- Numbers must be plain numbers (no currency symbols, no thousands separators).
-- If a field is missing, use a sensible default (0, null, or "$fallbackCurrency").
-- Pick the single best category from the allowed list.
-''';
+  // ── Receipt extraction ─────────────────────────────────────────────────────
 
   Future<ReceiptDraft> extract(String ocrText,
       {required String fallbackCurrency}) async {
-    if (!Env.hasOpenAi) {
-      throw ExtractionException('OpenAI API key is not configured.');
-    }
-
     try {
-      final response = await _dio.post(
-        _endpoint,
-        options: Options(headers: {
-          'Authorization': 'Bearer ${Env.openAiApiKey}',
-          'Content-Type': 'application/json',
-        }),
-        data: {
-          'model': Env.openAiModel,
-          'temperature': 0,
-          'response_format': {'type': 'json_object'},
-          'messages': [
-            {'role': 'system', 'content': _systemPrompt(fallbackCurrency)},
-            {'role': 'user', 'content': 'Receipt text:\n"""\n$ocrText\n"""'}
-          ],
-        },
+      final res = await _sb.functions.invoke(
+        'scan/extract',
+        body: {'ocr_text': ocrText, 'currency': fallbackCurrency},
       );
-
-      final content =
-          response.data['choices']?[0]?['message']?['content'] as String?;
-      if (content == null || content.trim().isEmpty) {
-        throw ExtractionException('AI returned an empty response.');
+      final data = res.data as Map?;
+      if (data?['error'] != null) {
+        throw ExtractionException(data!['error'].toString());
       }
-
-      final parsed = jsonDecode(content) as Map<String, dynamic>;
+      final parsed = Map<String, dynamic>.from(data!);
       return ReceiptDraft.fromExtraction(parsed,
           fallbackCurrency: fallbackCurrency)
         ..rawText = ocrText;
-    } on DioException catch (e) {
-      final msg = e.response?.data is Map
-          ? (e.response?.data['error']?['message']?.toString() ?? e.message)
-          : e.message;
-      throw ExtractionException('Extraction request failed: $msg');
-    } on FormatException {
-      throw ExtractionException('AI returned malformed JSON.');
+    } on FunctionException catch (e) {
+      throw ExtractionException('Extraction request failed: ${e.details}');
+    } catch (e) {
+      if (e is ExtractionException) rethrow;
+      throw ExtractionException('Extraction request failed: $e');
     }
   }
 
-  // ---- Monthly review generation (AI Financial Coach) ----
+  // ── AI Monthly Review ──────────────────────────────────────────────────────
 
-  /// Generates a personalised monthly financial review from the user's
-  /// spending analytics and budgets. Returns `null` when OpenAI is not
-  /// configured so the UI can fall back to rule-based insights.
+  /// Generates a personalised monthly financial review via the
+  /// [scan/monthly-review] Edge Function.
+  /// Returns `null` when Supabase is not configured (local/offline mode).
   Future<MonthlyReview?> generateMonthlyReview({
     required SpendingAnalytics analytics,
     required List<Budget> budgets,
     required String currency,
     required String monthLabel,
   }) async {
-    if (!Env.hasOpenAi) return null;
+    if (!Env.hasSupabase) return null;
 
     final breakdown = analytics.byCategory.entries
         .map((e) => '${e.key.label} ${Money(e.value, currency).format()}')
         .join(', ');
 
-    final budgetLines = budgets.map((b) {
-      final used = analytics.byCategory[b.category] ?? 0;
-      final pct = b.limit > 0 ? (used / b.limit * 100).round() : 0;
-      return '${b.category.label}: ${Money(used, currency).format()} of '
-          '${Money(b.limit, b.currency).format()} ($pct%)';
-    }).join('\n');
-
-    final prompt = '''
-You are ReceiptIQ's AI Financial Coach. Generate a friendly, encouraging monthly financial review for a user in East Africa.
-
-User data for $monthLabel:
-- Total spent: ${Money(analytics.monthlySpend, currency).format()}
-- Receipts: ${analytics.receiptCount}
-- Biggest category: ${analytics.biggestCategory?.label ?? '—'} (${Money(analytics.biggestCategoryAmount, currency).format()})
-- Category breakdown: $breakdown
-- Budget status:
-$budgetLines
-
-Rules:
-- Be encouraging and practical, never shaming.
-- Highlight one positive trend or win.
-- Flag any budget overruns gently.
-- Give 2–3 actionable, specific tips.
-- Keep total review under 180 words.
-- Use local context when relevant (Kenya / Tanzania / Uganda / Nigeria / Ghana).
-
-Return JSON with this exact schema:
-{
-  "headline": "string (catchy one-line headline)",
-  "summary": "string (2-3 sentence overview)",
-  "insights": ["string", "string", "..."],
-  "tips": ["string", "string", "string"],
-  "budget_alerts": ["string", "..."],
-  "tone": "positive|neutral|caution"
-}
-''';
+    final budgetStatus = budgets.isEmpty
+        ? 'No budgets set.'
+        : budgets.map((b) {
+            final used = analytics.byCategory[b.category] ?? 0;
+            final pct = b.limit > 0 ? (used / b.limit * 100).round() : 0;
+            return '${b.category.label}: ${Money(used, currency).format()} of '
+                '${Money(b.limit, b.currency).format()} ($pct%)';
+          }).join('\n');
 
     try {
-      final response = await _dio.post(
-        _endpoint,
-        options: Options(headers: {
-          'Authorization': 'Bearer ${Env.openAiApiKey}',
-          'Content-Type': 'application/json',
-        }),
-        data: {
-          'model': Env.openAiModel,
-          'temperature': 0.4,
-          'response_format': {'type': 'json_object'},
-          'messages': [
-            {'role': 'system', 'content': prompt},
-          ],
+      final res = await _sb.functions.invoke(
+        'scan/monthly-review',
+        body: {
+          'month_label':             monthLabel,
+          'currency':                currency,
+          'total_spent':             analytics.monthlySpend,
+          'receipt_count':           analytics.receiptCount,
+          'biggest_category':        analytics.biggestCategory?.label,
+          'biggest_category_amount': analytics.biggestCategoryAmount,
+          'category_breakdown':      breakdown,
+          'budget_status':           budgetStatus,
         },
       );
-
-      final content =
-          response.data['choices']?[0]?['message']?['content'] as String?;
-      if (content == null || content.trim().isEmpty) return null;
-      return MonthlyReview.fromJson(
-          jsonDecode(content) as Map<String, dynamic>);
-    } on DioException catch (e) {
-      final msg = e.response?.data is Map
-          ? (e.response?.data['error']?['message']?.toString() ?? e.message)
-          : e.message;
-      throw ExtractionException('Review generation failed: $msg');
-    } on FormatException {
-      throw ExtractionException('Review AI returned malformed JSON.');
+      final data = res.data as Map?;
+      if (data?['error'] != null) return null;
+      return MonthlyReview.fromJson(Map<String, dynamic>.from(data!));
+    } catch (_) {
+      return null;
     }
   }
 }

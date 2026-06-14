@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:dio/dio.dart';
-
-import '../config/env.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 class OcrException implements Exception {
   final String message;
@@ -12,62 +10,56 @@ class OcrException implements Exception {
   String toString() => 'OcrException: $message';
 }
 
-/// Reads raw text from a receipt image using the Google Cloud Vision API.
+/// Reads raw text from a receipt image via the [scan/ocr] Supabase Edge Function.
 ///
-/// NOTE: For production, proxy this through a backend/Edge Function so the
-/// API key is never shipped in the app binary.
+/// Flow:
+///   1. Upload image to the private `ocr-temp` Storage bucket.
+///   2. Call the Edge Function with the storage path.
+///   3. The function downloads the image server-side, calls Google Vision,
+///      deletes the temp file, and returns the extracted text.
 class OcrService {
-  final Dio _dio;
-  OcrService([Dio? dio]) : _dio = dio ?? Dio();
+  static const _bucket = 'ocr-temp';
+  static const _fn     = 'scan/ocr';
+  static const _uuid   = Uuid();
 
-  static const _endpoint = 'https://vision.googleapis.com/v1/images:annotate';
+  SupabaseClient get _sb => Supabase.instance.client;
 
   Future<String> readText(File image) async {
-    if (!Env.hasVision) {
-      throw OcrException('Google Vision API key is not configured.');
+    final uid = _sb.auth.currentUser?.id;
+    if (uid == null) throw OcrException('Not signed in — cannot scan.');
+
+    // ── 1. Upload to temp bucket ──────────────────────────────────────────
+    final tempPath = '$uid/${_uuid.v4()}.jpg';
+    try {
+      await _sb.storage.from(_bucket).upload(
+        tempPath,
+        image,
+        fileOptions: const FileOptions(upsert: true),
+      );
+    } catch (e) {
+      throw OcrException('Failed to upload image: $e');
     }
 
-    final bytes = await image.readAsBytes();
-    final base64Image = base64Encode(bytes);
-
+    // ── 2. Invoke Edge Function ───────────────────────────────────────────
     try {
-      final response = await _dio.post(
-        _endpoint,
-        queryParameters: {'key': Env.googleVisionApiKey},
-        data: {
-          'requests': [
-            {
-              'image': {'content': base64Image},
-              'features': [
-                {'type': 'DOCUMENT_TEXT_DETECTION'}
-              ],
-              'imageContext': {
-                'languageHints': ['en']
-              }
-            }
-          ]
-        },
+      final res = await _sb.functions.invoke(
+        _fn,
+        body: {'storage_path': tempPath},
       );
-
-      final responses = response.data['responses'] as List?;
-      if (responses == null || responses.isEmpty) {
-        throw OcrException('No text detected in the image.');
+      final data = res.data as Map?;
+      if (data?['error'] != null) {
+        throw OcrException(data!['error'].toString());
       }
-      final first = responses.first as Map<String, dynamic>;
-      if (first['error'] != null) {
-        throw OcrException(first['error']['message']?.toString() ??
-            'Vision API returned an error.');
-      }
-      final fullText = first['fullTextAnnotation']?['text'] as String?;
-      if (fullText == null || fullText.trim().isEmpty) {
+      final text = data?['text'] as String?;
+      if (text == null || text.trim().isEmpty) {
         throw OcrException('Could not read any text from this receipt.');
       }
-      return fullText;
-    } on DioException catch (e) {
-      final msg = e.response?.data is Map
-          ? (e.response?.data['error']?['message']?.toString() ?? e.message)
-          : e.message;
-      throw OcrException('OCR request failed: $msg');
+      return text;
+    } on FunctionException catch (e) {
+      throw OcrException('OCR request failed: ${e.details}');
+    } catch (e) {
+      if (e is OcrException) rethrow;
+      throw OcrException('OCR request failed: $e');
     }
   }
 }
