@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cunning_document_scanner/cunning_document_scanner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -22,20 +23,38 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
   bool _busy = false;
   String _status = '';
 
-  Future<void> _capture(ImageSource source) async {
+  // ── Document scanner (CamScanner-style) ──────────────────────────────────
+  Future<void> _scanDocument() async {
+    try {
+      final pictures = await CunningDocumentScanner.getPictures(
+        noOfPages: 1,
+        isGalleryImportAllowed: false,
+      );
+      if (pictures == null || pictures.isEmpty) return;
+      await _process(File(pictures.first));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Scanner error: $e')),
+      );
+    }
+  }
+
+  // ── Gallery fallback ──────────────────────────────────────────────────────
+  Future<void> _pickFromGallery() async {
     final XFile? file = await _picker.pickImage(
-      source: source,
-      imageQuality: 85,
-      maxWidth: 2000,
+      source: ImageSource.gallery,
+      imageQuality: 90,
+      maxWidth: 2400,
     );
     if (file == null) return;
     await _process(File(file.path));
   }
 
+  // ── Shared processing pipeline ────────────────────────────────────────────
   Future<void> _process(File image) async {
     final currency = ref.read(displayCurrencyProvider);
 
-    // If keys are missing, allow a manual draft so the flow is never blocked.
     if (!Env.canScanForReal) {
       _showMissingKeysDialog(image.path, currency);
       return;
@@ -96,6 +115,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Scan receipt')),
       body: _busy
@@ -110,60 +131,114 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
               ),
             )
           : Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(28),
-                    decoration: BoxDecoration(
-                      color: AppTheme.brand.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: const Icon(Icons.receipt_long,
-                        size: 72, color: AppTheme.brand),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Scan any receipt in seconds',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Take a photo or pick one from your gallery. The AI reads '
-                    'the merchant, total, VAT, items and category for you.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Color(0xFF64748B)),
-                  ),
-                  const Spacer(),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: () => _capture(ImageSource.camera),
-                      icon: const Icon(Icons.camera_alt_outlined),
-                      label: const Text('Take a photo'),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                  const SizedBox(height: 8),
+                  // ── Hero illustration ──────────────────────────────────
+                  Center(
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: AppTheme.brand.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(32),
                       ),
-                      onPressed: () => _capture(ImageSource.gallery),
-                      icon: const Icon(Icons.photo_library_outlined),
-                      label: const Text('Choose from gallery'),
+                      child: const Icon(Icons.document_scanner_outlined,
+                          size: 64, color: AppTheme.brand),
                     ),
                   ),
                   const SizedBox(height: 20),
+                  Text(
+                    'Scan your receipt',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Point the camera at a receipt. Edge detection will auto-crop '
+                    'and correct the perspective — just like a desktop scanner.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: const Color(0xFF64748B)),
+                  ),
+                  const SizedBox(height: 32),
+                  // ── Feature chips ──────────────────────────────────────
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: const [
+                      _FeatureChip(
+                          icon: Icons.crop_free, label: 'Auto edge detect'),
+                      _FeatureChip(
+                          icon: Icons.flip_camera_android_outlined,
+                          label: 'Perspective fix'),
+                      _FeatureChip(
+                          icon: Icons.auto_fix_high_outlined,
+                          label: 'Smart crop'),
+                    ],
+                  ),
+                  const Spacer(),
+                  // ── Primary: document scanner ──────────────────────────
+                  FilledButton.icon(
+                    onPressed: _scanDocument,
+                    icon: const Icon(Icons.document_scanner_outlined),
+                    label: const Text('Scan document'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // ── Secondary: gallery ─────────────────────────────────
+                  OutlinedButton.icon(
+                    onPressed: _pickFromGallery,
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('Choose from gallery'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _FeatureChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _FeatureChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppTheme.brand.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: AppTheme.brand),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: AppTheme.brand,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
