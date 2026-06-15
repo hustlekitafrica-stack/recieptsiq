@@ -46,6 +46,21 @@ class _AuthNotifier extends ChangeNotifier {
 
 /// Builds the app router. [onboarded] decides whether the first screen is the
 /// dashboard or the first-run onboarding flow.
+Page<void> _slidePage(Widget child) => CustomTransitionPage(
+  child: child,
+  transitionsBuilder: (context, animation, secondaryAnimation, child) {
+    final slideIn = CurvedAnimation(parent: animation, curve: Curves.easeInOut);
+    final slideOut = CurvedAnimation(parent: secondaryAnimation, curve: Curves.easeInOut);
+    return SlideTransition(
+      position: Tween(begin: Offset.zero, end: const Offset(-0.3, 0.0)).animate(slideOut),
+      child: SlideTransition(
+        position: Tween(begin: const Offset(1.0, 0.0), end: Offset.zero).animate(slideIn),
+        child: child,
+      ),
+    );
+  },
+);
+
 GoRouter createAppRouter({required bool onboarded}) {
   final notifier = Env.hasSupabase ? _AuthNotifier() : null;
 
@@ -139,11 +154,11 @@ final _routes = <RouteBase>[
     GoRoute(
       path: '/auth',
       parentNavigatorKey: _rootKey,
-      builder: (c, s) => const AuthScreen(),
+      pageBuilder: (c, s) => _slidePage(const AuthScreen()),
     ),
     GoRoute(
       path: '/auth/phone',
       parentNavigatorKey: _rootKey,
-      builder: (c, s) => const PhoneOtpScreen(),
+      pageBuilder: (c, s) => _slidePage(const PhoneOtpScreen()),
     ),
 ];
