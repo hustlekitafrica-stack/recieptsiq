@@ -35,7 +35,7 @@ class _PesapalScreenState extends State<PesapalScreen> {
     try {
       final client = Supabase.instance.client;
       final response = await client.functions.invoke(
-        'payments/initiate-pesapal',
+        'payments-initiate-pesapal',
         body: jsonEncode({'tier': widget.tier.name}),
       );
       if (response.status != 200) {

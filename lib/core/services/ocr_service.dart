@@ -10,7 +10,7 @@ class OcrException implements Exception {
   String toString() => 'OcrException: $message';
 }
 
-/// Reads raw text from a receipt image via the [scan/ocr] Supabase Edge Function.
+/// Reads raw text from a receipt image via the [scan-ocr] Supabase Edge Function.
 ///
 /// Flow:
 ///   1. Upload image to the private `ocr-temp` Storage bucket.
@@ -19,7 +19,7 @@ class OcrException implements Exception {
 ///      deletes the temp file, and returns the extracted text.
 class OcrService {
   static const _bucket = 'ocr-temp';
-  static const _fn     = 'scan/ocr';
+  static const _fn     = 'scan-ocr';
   static const _uuid   = Uuid();
 
   SupabaseClient get _sb => Supabase.instance.client;

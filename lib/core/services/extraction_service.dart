@@ -27,7 +27,7 @@ class ExtractionService {
       {required String fallbackCurrency}) async {
     try {
       final res = await _sb.functions.invoke(
-        'scan/extract',
+        'scan-extract',
         body: {'ocr_text': ocrText, 'currency': fallbackCurrency},
       );
       final data = res.data as Map?;
@@ -74,7 +74,7 @@ class ExtractionService {
 
     try {
       final res = await _sb.functions.invoke(
-        'scan/monthly-review',
+        'scan-monthly-review',
         body: {
           'month_label':             monthLabel,
           'currency':                currency,

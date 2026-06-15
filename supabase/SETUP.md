@@ -190,20 +190,15 @@ secrets in the Supabase dashboard → **Edge Functions** → **Manage secrets**:
 | `DARAJA_CONSUMER_SECRET` | same |
 | `DARAJA_SHORTCODE` | your M-Pesa PayBill / Till number |
 | `DARAJA_PASSKEY` | Safaricom sandbox/production passkey |
-| `DARAJA_CALLBACK_URL` | your Supabase function URL: `https://<project>.supabase.co/functions/v1/payments/mpesa-callback` |
+| `DARAJA_CALLBACK_URL` | your Supabase function URL: `https://<project>.supabase.co/functions/v1/payments-mpesa-callback` |
 | `PESAPAL_CONSUMER_KEY` | Pesapal merchant dashboard |
 | `PESAPAL_CONSUMER_SECRET` | same |
-| `PESAPAL_IPN_URL` | your Supabase function URL: `https://<project>.supabase.co/functions/v1/payments/pesapal-ipn` |
+| `PESAPAL_IPN_URL` | your Supabase function URL: `https://<project>.supabase.co/functions/v1/payments-pesapal-ipn` |
 | | same redirect URL as above |
 
 ### 9c. Deploy Edge Functions
 ```bash
-supabase functions deploy payments/initiate-stk
-supabase functions deploy payments/mpesa-callback
-supabase functions deploy payments/check-stk
-supabase functions deploy payments/mpesa-renew
-supabase functions deploy payments/initiate-pesapal
-supabase functions deploy payments/pesapal-ipn
+supabase functions deploy payments-initiate-stk payments-mpesa-callback payments-check-stk payments-mpesa-renew payments-initiate-pesapal payments-pesapal-ipn scan-ocr scan-extract scan-monthly-review --project-ref <project-ref> --use-api
 ```
 
 ### 9d. Set up the M-Pesa auto-renewal cron
@@ -214,7 +209,7 @@ select cron.schedule(
   '0 7 * * *',  -- 7 AM UTC daily
   $$
     select net.http_post(
-      url := 'https://<project>.supabase.co/functions/v1/payments/mpesa-renew',
+      url := 'https://<project>.supabase.co/functions/v1/payments-mpesa-renew',
       headers := '{"Authorization":"Bearer <SERVICE_ROLE_KEY>"}'::jsonb
     );
   $$

@@ -57,7 +57,7 @@ class _MpesaStkScreenState extends ConsumerState<MpesaStkScreen> {
       final phone = _phoneController.text.trim().replaceAll(RegExp(r'\s'), '');
       final client = Supabase.instance.client;
       final response = await client.functions.invoke(
-        'payments/initiate-stk',
+        'payments-initiate-stk',
         body: jsonEncode({
           'phone': phone,
           'tier': widget.tier.name,
@@ -101,7 +101,7 @@ class _MpesaStkScreenState extends ConsumerState<MpesaStkScreen> {
     try {
       final client = Supabase.instance.client;
       final response = await client.functions.invoke(
-        'payments/check-stk',
+        'payments-check-stk',
         body: jsonEncode({'checkoutRequestId': _checkoutRequestId}),
       );
       if (response.status != 200) return;
