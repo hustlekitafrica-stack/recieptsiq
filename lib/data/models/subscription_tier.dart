@@ -3,7 +3,6 @@ enum SubscriptionTier { free, starter, pro }
 class TierCapabilities {
   final SubscriptionTier tier;
   final int maxScansPerMonth;
-  final int maxBudgets;
   final int historyDays;
   final bool aiMonthlyReview;
   final bool fullAiInsights;
@@ -12,7 +11,6 @@ class TierCapabilities {
   const TierCapabilities({
     required this.tier,
     required this.maxScansPerMonth,
-    required this.maxBudgets,
     required this.historyDays,
     required this.aiMonthlyReview,
     required this.fullAiInsights,
@@ -20,7 +18,6 @@ class TierCapabilities {
   });
 
   bool get isUnlimitedScans => maxScansPerMonth < 0;
-  bool get isUnlimitedBudgets => maxBudgets < 0;
   bool get isUnlimitedHistory => historyDays < 0;
 
   String get displayName {

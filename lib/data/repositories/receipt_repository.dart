@@ -4,18 +4,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/money.dart';
-import '../models/budget.dart';
 import '../models/category.dart';
 import '../models/line_item.dart';
+import '../models/monthly_review.dart';
 import '../models/receipt.dart';
+import '../models/yearly_review.dart';
 import 'repository.dart';
 
-/// Persists receipts and budgets locally (shared_preferences).
+/// Persists receipts locally (shared_preferences).
 ///
 /// Used when Supabase is not configured, and as an offline-friendly default.
 class LocalReceiptRepository implements ReceiptRepository {
   static const _receiptsKey = 'receipts_v1';
-  static const _budgetsKey = 'budgets_v1';
   static const _seededKey = 'seeded_v1';
 
   final _uuid = const Uuid();
@@ -72,34 +72,55 @@ class LocalReceiptRepository implements ReceiptRepository {
     return receipts;
   }
 
-  // ---- Budgets ----
+  // ---- Review cache ----
 
   @override
-  Future<List<Budget>> loadBudgets() async {
+  Future<MonthlyReview?> loadMonthlyReviewCache(String yearMonth) async {
     final prefs = await _prefs;
-    final raw = prefs.getString(_budgetsKey);
-    if (raw == null) return [];
-    final list = jsonDecode(raw) as List;
-    return list
-        .map((e) => Budget.fromJson((e as Map).cast<String, dynamic>()))
-        .toList();
+    final raw = prefs.getString('review_cache_$yearMonth');
+    if (raw == null) return null;
+    try {
+      return MonthlyReview.fromJson(
+          jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
-  Future<void> saveBudgets(List<Budget> budgets) async {
+  Future<void> saveMonthlyReviewCache(
+      String yearMonth, MonthlyReview review) async {
     final prefs = await _prefs;
-    final raw = jsonEncode(budgets.map((e) => e.toJson()).toList());
-    await prefs.setString(_budgetsKey, raw);
+    await prefs.setString(
+        'review_cache_$yearMonth', jsonEncode(review.toJson()));
+  }
+
+  @override
+  Future<YearlyReview?> loadYearlyReviewCache(int year) async {
+    final prefs = await _prefs;
+    final raw = prefs.getString('yearly_cache_$year');
+    if (raw == null) return null;
+    try {
+      return YearlyReview.fromJson(
+          jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> saveYearlyReviewCache(int year, YearlyReview review) async {
+    final prefs = await _prefs;
+    await prefs.setString('yearly_cache_$year', jsonEncode(review.toJson()));
   }
 
   // ---- Data management ----
 
-  /// Wipes all locally stored receipts, budgets, and the seed flag so the
+  /// Wipes all locally stored receipts and the seed flag so the
   /// next call to [loadReceipts] starts with a clean slate.
   static Future<void> clearAllData() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_receiptsKey);
-    await prefs.remove(_budgetsKey);
     await prefs.remove(_seededKey);
   }
 
@@ -145,18 +166,6 @@ class LocalReceiptRepository implements ReceiptRepository {
     ];
 
     await _saveReceipts(seed);
-    await saveBudgets([
-      Budget(
-          id: _uuid.v4(),
-          category: ExpenseCategory.groceries,
-          limit: 20000,
-          currency: 'KES'),
-      Budget(
-          id: _uuid.v4(),
-          category: ExpenseCategory.fuel,
-          limit: 10000,
-          currency: 'KES'),
-    ]);
     await prefs.setBool(_seededKey, true);
   }
 }

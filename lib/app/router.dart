@@ -7,7 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/config/env.dart';
 import '../data/models/receipt_draft.dart';
 import '../data/models/subscription_tier.dart';
-import '../features/budgets/budgets_screen.dart';
+import '../features/analytics/analytics_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
 import '../features/dashboard/monthly_review_screen.dart';
 import '../features/auth/auth_screen.dart';
@@ -18,6 +18,9 @@ import '../features/paywall/paywall_screen.dart';
 import '../features/paywall/pesapal_screen.dart';
 import '../features/receipts/receipt_detail_screen.dart';
 import '../features/receipts/receipts_screen.dart';
+import '../features/history/history_month_detail_screen.dart';
+import '../features/history/history_screen.dart';
+import '../features/history/yearly_review_screen.dart';
 import '../features/scan/review_screen.dart';
 import '../features/scan/scan_screen.dart';
 import '../features/search/search_screen.dart';
@@ -106,9 +109,9 @@ final _routes = <RouteBase>[
               const NoTransitionPage(child: ReceiptsScreen()),
         ),
         GoRoute(
-          path: '/budgets',
+          path: '/analytics',
           pageBuilder: (c, s) =>
-              const NoTransitionPage(child: BudgetsScreen()),
+              const NoTransitionPage(child: AnalyticsScreen()),
         ),
         GoRoute(
           path: '/search',
@@ -159,6 +162,23 @@ final _routes = <RouteBase>[
     GoRoute(
       path: '/auth/phone',
       parentNavigatorKey: _rootKey,
-      pageBuilder: (c, s) => _slidePage(const PhoneOtpScreen()),
+      pageBuilder: (c, s) => _slidePage(PhoneOtpScreen(phone: s.extra as String? ?? '')),
+    ),
+    GoRoute(
+      path: '/history',
+      parentNavigatorKey: _rootKey,
+      builder: (c, s) => const HistoryScreen(),
+    ),
+    GoRoute(
+      path: '/history/month/:yearMonth',
+      parentNavigatorKey: _rootKey,
+      builder: (c, s) => HistoryMonthDetailScreen(
+          yearMonth: s.pathParameters['yearMonth']!),
+    ),
+    GoRoute(
+      path: '/history/year/:year',
+      parentNavigatorKey: _rootKey,
+      builder: (c, s) => YearlyReviewScreen(
+          year: int.parse(s.pathParameters['year']!)),
     ),
 ];

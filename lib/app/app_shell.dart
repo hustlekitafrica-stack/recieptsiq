@@ -8,7 +8,7 @@ class AppShell extends StatelessWidget {
   final Widget child;
   const AppShell({super.key, required this.child});
 
-  static const _tabs = ['/dashboard', '/receipts', '/budgets', '/search'];
+  static const _tabs = ['/dashboard', '/receipts', '/analytics', '/search'];
 
   int _indexFor(String location) {
     final i = _tabs.indexWhere((t) => location.startsWith(t));
@@ -57,11 +57,11 @@ class AppShell extends StatelessWidget {
             ),
             const SizedBox(width: 48),
             _NavItem(
-              icon: Icons.pie_chart_outline,
-              activeIcon: Icons.pie_chart,
-              label: 'Budgets',
+              icon: Icons.bar_chart_outlined,
+              activeIcon: Icons.bar_chart,
+              label: 'Analytics',
               selected: index == 2,
-              onTap: () => context.go('/budgets'),
+              onTap: () => context.go('/analytics'),
             ),
             _NavItem(
               icon: Icons.search_outlined,

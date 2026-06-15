@@ -15,7 +15,6 @@ class SubscriptionConfig {
   static const free = TierCapabilities(
     tier: SubscriptionTier.free,
     maxScansPerMonth: 5,
-    maxBudgets: 1,
     historyDays: 30,
     aiMonthlyReview: false,
     fullAiInsights: false,
@@ -25,7 +24,6 @@ class SubscriptionConfig {
   static const starter = TierCapabilities(
     tier: SubscriptionTier.starter,
     maxScansPerMonth: 50,
-    maxBudgets: 5,
     historyDays: 180,
     aiMonthlyReview: true,
     fullAiInsights: true,
@@ -35,7 +33,6 @@ class SubscriptionConfig {
   static const pro = TierCapabilities(
     tier: SubscriptionTier.pro,
     maxScansPerMonth: -1,
-    maxBudgets: -1,
     historyDays: -1,
     aiMonthlyReview: true,
     fullAiInsights: true,

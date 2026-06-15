@@ -25,6 +25,15 @@ class MonthlyReview {
         tone: (json['tone'] ?? 'neutral').toString(),
       );
 
+  Map<String, dynamic> toJson() => {
+        'headline': headline,
+        'summary': summary,
+        'insights': insights,
+        'tips': tips,
+        'budget_alerts': budgetAlerts,
+        'tone': tone,
+      };
+
   static List<String> _listOfStrings(dynamic v) {
     if (v is List) return v.map((e) => e.toString()).toList();
     return [];

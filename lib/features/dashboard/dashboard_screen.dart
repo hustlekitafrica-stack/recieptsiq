@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/providers.dart';
@@ -107,7 +107,7 @@ class DashboardScreen extends ConsumerWidget {
                       builder: (d) => AlertDialog(
                         title: const Text('Clear all data?'),
                         content: const Text(
-                            'Removes all receipts, budgets, and scan history '
+                            'Removes all receipts and scan history '
                             'from this device. Cloud data (if any) is unaffected.\n\nThis cannot be undone.'),
                         actions: [
                           TextButton(
@@ -127,7 +127,6 @@ class DashboardScreen extends ConsumerWidget {
                     await LocalReceiptRepository.clearAllData();
                     await ref.read(usageServiceProvider)?.clearAll();
                     ref.invalidate(receiptsProvider);
-                    ref.invalidate(budgetsProvider);
                   },
                   child: const Text('Clear all data',
                       style: TextStyle(color: Color(0xFFEA580C))),
@@ -145,8 +144,12 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currency = ref.watch(displayCurrencyProvider);
     final receiptsAsync = ref.watch(receiptsProvider);
-    final reviewAsync = ref.watch(monthlyReviewProvider);
+    final selectedMonth = ref.watch(selectedDashboardMonthProvider);
+    final reviewAsync = ref.watch(monthlyReviewProvider(selectedMonth));
     final caps = ref.watch(tierCapabilitiesProvider);
+    final now = DateTime.now();
+    final isCurrentMonth =
+        selectedMonth.year == now.year && selectedMonth.month == now.month;
 
     return Scaffold(
       appBar: AppBar(
@@ -166,10 +169,25 @@ class DashboardScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (receipts) {
-          final a = SpendingAnalytics.compute(receipts);
+          final a = SpendingAnalytics.compute(receipts, now: selectedMonth);
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
             children: [
+              _MonthPicker(
+                month: selectedMonth,
+                isCurrentMonth: isCurrentMonth,
+                onPrev: () => ref
+                    .read(selectedDashboardMonthProvider.notifier)
+                    .state = DateTime(
+                        selectedMonth.year, selectedMonth.month - 1),
+                onNext: isCurrentMonth
+                    ? null
+                    : () => ref
+                        .read(selectedDashboardMonthProvider.notifier)
+                        .state = DateTime(
+                            selectedMonth.year, selectedMonth.month + 1),
+              ),
+              const SizedBox(height: 8),
               _MonthlyHero(amount: a.monthlySpend, currency: currency, trend: a.trendPercent),
               const SizedBox(height: 16),
               caps.aiMonthlyReview
@@ -204,16 +222,77 @@ class DashboardScreen extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 4),
-              ...receipts.take(4).map((r) => _RecentTile(receipt: r)),
-              if (receipts.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: Text('No receipts yet. Tap scan to start.')),
+              ...() {
+                final monthReceipts = receipts
+                    .where((r) =>
+                        r.date.year == selectedMonth.year &&
+                        r.date.month == selectedMonth.month)
+                    .toList();
+                if (monthReceipts.isEmpty) {
+                  return [
+                    const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(
+                          child: Text('No receipts for this month.')),
+                    )
+                  ];
+                }
+                return monthReceipts
+                    .take(4)
+                    .map((r) => _RecentTile(receipt: r))
+                    .toList();
+              }(),
+              const SizedBox(height: 8),
+              Center(
+                child: TextButton.icon(
+                  onPressed: () => context.push('/history'),
+                  icon: const Icon(Icons.history, size: 18),
+                  label: const Text('View history'),
                 ),
+              ),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+class _MonthPicker extends StatelessWidget {
+  final DateTime month;
+  final bool isCurrentMonth;
+  final VoidCallback onPrev;
+  final VoidCallback? onNext;
+  const _MonthPicker({
+    required this.month,
+    required this.isCurrentMonth,
+    required this.onPrev,
+    this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = DateFormat.yMMMM().format(month);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.chevron_left),
+          onPressed: onPrev,
+          visualDensity: VisualDensity.compact,
+        ),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 15, fontWeight: FontWeight.w700)),
+        IconButton(
+          icon: Icon(Icons.chevron_right,
+              color: isCurrentMonth
+                  ? const Color(0xFFCBD5E1)
+                  : null),
+          onPressed: onNext,
+          visualDensity: VisualDensity.compact,
+        ),
+      ],
     );
   }
 }

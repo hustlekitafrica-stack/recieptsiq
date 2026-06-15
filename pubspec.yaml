@@ -60,6 +60,9 @@ dependencies:
   # IDs
   uuid: ^4.5.1
 
+  # International phone number input with country picker
+  intl_phone_field: ^3.2.0
+
   # Env / config
   flutter_dotenv: ^5.1.0
 

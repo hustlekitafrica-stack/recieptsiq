@@ -2,10 +2,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/env.dart';
 import '../money.dart';
-import '../../data/models/budget.dart';
 import '../../data/models/category.dart';
 import '../../data/models/monthly_review.dart';
 import '../../data/models/receipt_draft.dart';
+import '../../data/models/yearly_review.dart';
 import '../../features/dashboard/analytics.dart';
 
 class ExtractionException implements Exception {
@@ -53,7 +53,6 @@ class ExtractionService {
   /// Returns `null` when Supabase is not configured (local/offline mode).
   Future<MonthlyReview?> generateMonthlyReview({
     required SpendingAnalytics analytics,
-    required List<Budget> budgets,
     required String currency,
     required String monthLabel,
   }) async {
@@ -62,15 +61,6 @@ class ExtractionService {
     final breakdown = analytics.byCategory.entries
         .map((e) => '${e.key.label} ${Money(e.value, currency).format()}')
         .join(', ');
-
-    final budgetStatus = budgets.isEmpty
-        ? 'No budgets set.'
-        : budgets.map((b) {
-            final used = analytics.byCategory[b.category] ?? 0;
-            final pct = b.limit > 0 ? (used / b.limit * 100).round() : 0;
-            return '${b.category.label}: ${Money(used, currency).format()} of '
-                '${Money(b.limit, b.currency).format()} ($pct%)';
-          }).join('\n');
 
     try {
       final res = await _sb.functions.invoke(
@@ -83,12 +73,78 @@ class ExtractionService {
           'biggest_category':        analytics.biggestCategory?.label,
           'biggest_category_amount': analytics.biggestCategoryAmount,
           'category_breakdown':      breakdown,
-          'budget_status':           budgetStatus,
         },
       );
       final data = res.data as Map?;
       if (data?['error'] != null) return null;
       return MonthlyReview.fromJson(Map<String, dynamic>.from(data!));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ── AI Yearly Review ───────────────────────────────────────────────────────
+
+  /// Generates a year-in-review via the [scan/monthly-review] edge function
+  /// with a yearly context payload. Returns `null` when Supabase is not
+  /// configured or the call fails.
+  Future<YearlyReview?> generateYearlyReview({
+    required YearlyAnalytics analytics,
+    required String currency,
+  }) async {
+    if (!Env.hasSupabase) return null;
+
+    final breakdown = analytics.byCategory.entries
+        .map((e) => '${e.key.label} ${Money(e.value, currency).format()}')
+        .join(', ');
+
+    final monthNames = [
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+
+    try {
+      final res = await _sb.functions.invoke(
+        'scan-monthly-review',
+        body: {
+          'month_label': 'Full year ${analytics.year}',
+          'currency': currency,
+          'total_spent': analytics.totalSpend,
+          'receipt_count': analytics.receiptCount,
+          'biggest_category': analytics.byCategory.entries.isEmpty
+              ? null
+              : (analytics.byCategory.entries.toList()
+                    ..sort((a, b) => b.value.compareTo(a.value)))
+                  .first
+                  .key
+                  .label,
+          'biggest_category_amount': analytics.byCategory.values.isEmpty
+              ? 0
+              : analytics.byCategory.values.reduce((a, b) => a > b ? a : b),
+          'category_breakdown': breakdown,
+          'budget_status':
+              'Best month: ${monthNames[analytics.bestMonth]}, '
+              'worst month: ${monthNames[analytics.worstMonth]}. '
+              'YoY change: ${analytics.yearOverYearChange?.toStringAsFixed(1) ?? 'N/A'}%.',
+        },
+      );
+      final data = res.data as Map?;
+      if (data?['error'] != null) return null;
+      final review = MonthlyReview.fromJson(Map<String, dynamic>.from(data!));
+      return YearlyReview(
+        year: analytics.year,
+        totalSpend: analytics.totalSpend,
+        monthlyTotals: analytics.monthlyTotals,
+        byCategory: analytics.byCategory,
+        topMerchants: analytics.topMerchants,
+        bestMonth: analytics.bestMonth,
+        worstMonth: analytics.worstMonth,
+        receiptCount: analytics.receiptCount,
+        yearOverYearChange: analytics.yearOverYearChange,
+        headline: review.headline,
+        summary: review.summary,
+        savingsOpportunities: [...review.insights, ...review.tips],
+      );
     } catch (_) {
       return null;
     }

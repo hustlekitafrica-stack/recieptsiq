@@ -5,9 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/config/env.dart';
 import '../core/services/extraction_service.dart';
 import '../core/services/ocr_service.dart';
-import '../data/models/budget.dart';
 import '../data/models/monthly_review.dart';
 import '../data/models/receipt.dart';
+import '../data/models/yearly_review.dart';
 import '../data/repositories/receipt_repository.dart';
 import '../data/repositories/repository.dart';
 import '../data/repositories/supabase_receipt_repository.dart';
@@ -88,30 +88,12 @@ final receiptsProvider =
   return ReceiptsNotifier(ref.watch(repositoryProvider), ref);
 });
 
-/// ---- Budgets ----
+// ── Selected dashboard month ───────────────────────────────────────────────
 
-class BudgetsNotifier extends StateNotifier<List<Budget>> {
-  final ReceiptRepository _repo;
-  final Ref _ref;
-  BudgetsNotifier(this._repo, this._ref) : super(const []) {
-    load();
-  }
-
-  Future<void> load() async {
-    state = await _repo.loadBudgets();
-  }
-
-  Future<void> save(List<Budget> budgets) async {
-    await _repo.saveBudgets(budgets);
-    state = budgets;
-    invalidateMonthlyReview(_ref);
-  }
-}
-
-final budgetsProvider =
-    StateNotifierProvider<BudgetsNotifier, List<Budget>>((ref) {
-  return BudgetsNotifier(ref.watch(repositoryProvider), ref);
-});
+/// The month currently shown on the dashboard. Defaults to the current month.
+final selectedDashboardMonthProvider = StateProvider<DateTime>(
+  (ref) => DateTime(DateTime.now().year, DateTime.now().month),
+);
 
 /// ---- AI Monthly Review ----
 
@@ -119,37 +101,90 @@ final budgetsProvider =
 /// receipt). Incremented imperatively from notifier actions.
 final _reviewInvalidateProvider = StateProvider<int>((ref) => 0);
 
-/// Generates the AI monthly review for the current month.
-/// Returns `null` when there are no receipts this month or OpenAI is not
-/// configured. Falls back gracefully so the dashboard always works.
-final monthlyReviewProvider = FutureProvider.autoDispose<MonthlyReview?>((ref) async {
+/// Generates the AI monthly review for the given [month].
+/// Checks the local cache first; calls the AI only on a miss, then caches.
+/// Returns `null` when there are no receipts that month or AI is not configured.
+final monthlyReviewProvider =
+    FutureProvider.autoDispose.family<MonthlyReview?, DateTime>((ref, month) async {
   ref.watch(_reviewInvalidateProvider);
   final repo = ref.read(repositoryProvider);
   final service = ref.read(extractionServiceProvider);
   final currency = ref.read(displayCurrencyProvider);
 
-  final receipts = await repo.loadReceipts();
-  final budgets = await repo.loadBudgets();
+  final cacheKey =
+      '${month.year}_${month.month.toString().padLeft(2, '0')}';
 
-  final now = DateTime.now();
+  final cached = await repo.loadMonthlyReviewCache(cacheKey);
+  if (cached != null) return cached;
+
+  final receipts = await repo.loadReceipts();
+
   final monthReceipts = receipts
-      .where((r) => r.date.year == now.year && r.date.month == now.month)
+      .where((r) => r.date.year == month.year && r.date.month == month.month)
       .toList();
 
   if (monthReceipts.isEmpty) return null;
 
-  final analytics = SpendingAnalytics.compute(monthReceipts, now: now);
-  final monthLabel = DateFormat.yMMMM().format(now);
+  final analytics = SpendingAnalytics.compute(monthReceipts, now: month);
+  final monthLabel = DateFormat.yMMMM().format(month);
 
-  return service.generateMonthlyReview(
+  final review = await service.generateMonthlyReview(
     analytics: analytics,
-    budgets: budgets,
     currency: currency,
     monthLabel: monthLabel,
   );
+
+  if (review != null) {
+    await repo.saveMonthlyReviewCache(cacheKey, review);
+  }
+  return review;
 });
 
 /// Call this after mutating receipts/budgets to refresh the review.
 void invalidateMonthlyReview(Ref ref) {
   ref.read(_reviewInvalidateProvider.notifier).state++;
 }
+
+// ── Yearly Review ─────────────────────────────────────────────────────────
+
+/// Generates the AI yearly review for the given [year].
+/// Cache-first: stored in SharedPreferences, generated on first view.
+final yearlyReviewProvider =
+    FutureProvider.autoDispose.family<YearlyReview?, int>((ref, year) async {
+  final repo = ref.read(repositoryProvider);
+  final service = ref.read(extractionServiceProvider);
+  final currency = ref.read(displayCurrencyProvider);
+
+  final cached = await repo.loadYearlyReviewCache(year);
+  if (cached != null) return cached;
+
+  final receipts = await repo.loadReceipts();
+  final analytics = YearlyAnalytics.compute(receipts, year);
+
+  if (analytics.receiptCount == 0) return null;
+
+  final review = await service.generateYearlyReview(
+    analytics: analytics,
+    currency: currency,
+  );
+
+  if (review != null) {
+    await repo.saveYearlyReviewCache(year, review);
+    return review;
+  }
+
+  return YearlyReview(
+    year: year,
+    totalSpend: analytics.totalSpend,
+    monthlyTotals: analytics.monthlyTotals,
+    byCategory: analytics.byCategory,
+    topMerchants: analytics.topMerchants,
+    bestMonth: analytics.bestMonth,
+    worstMonth: analytics.worstMonth,
+    receiptCount: analytics.receiptCount,
+    yearOverYearChange: analytics.yearOverYearChange,
+    headline: '${analytics.year} in review',
+    summary: '',
+    savingsOpportunities: [],
+  );
+});

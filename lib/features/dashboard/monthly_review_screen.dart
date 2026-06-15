@@ -11,8 +11,10 @@ class MonthlyReviewScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final reviewAsync = ref.watch(monthlyReviewProvider);
-    final monthLabel = DateFormat.yMMMM().format(DateTime.now());
+    final now = DateTime.now();
+    final month = DateTime(now.year, now.month);
+    final reviewAsync = ref.watch(monthlyReviewProvider(month));
+    final monthLabel = DateFormat.yMMMM().format(now);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Monthly Review')),

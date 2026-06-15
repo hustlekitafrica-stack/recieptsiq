@@ -1,16 +1,19 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/money.dart';
-import '../models/budget.dart';
 import '../models/category.dart';
 import '../models/line_item.dart';
+import '../models/monthly_review.dart';
 import '../models/receipt.dart';
+import '../models/yearly_review.dart';
 import 'repository.dart';
 
-/// Supabase-backed store: receipts/line_items/budgets in Postgres, images in
+/// Supabase-backed store: receipts/line_items in Postgres, images in
 /// the private `receipts` Storage bucket. Activated when SUPABASE_* env vars
 /// are set. Requires an authenticated session (anonymous sign-in is fine).
 class SupabaseReceiptRepository implements ReceiptRepository {
@@ -94,45 +97,44 @@ class SupabaseReceiptRepository implements ReceiptRepository {
     return loadReceipts();
   }
 
-  // ---- Budgets ----
+  // ---- Review cache (stored in SharedPreferences regardless of backend) ----
 
   @override
-  Future<List<Budget>> loadBudgets() async {
-    final rows = await _db.from('budgets').select();
-    return (rows as List).map((r) {
-      final row = r as Map<String, dynamic>;
-      return Budget(
-        id: row['id'] as String,
-        category: ExpenseCategoryX.fromKey(row['category'] as String?),
-        limit: (row['limit_amount'] as num?)?.toDouble() ?? 0,
-        currency: row['currency'] as String? ?? 'KES',
-      );
-    }).toList();
+  Future<MonthlyReview?> loadMonthlyReviewCache(String yearMonth) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('review_cache_$yearMonth');
+    if (raw == null) return null;
+    try {
+      return MonthlyReview.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
-  Future<void> saveBudgets(List<Budget> budgets) async {
-    // Upsert on (user_id, category); remove any that were deleted client-side.
-    final keep = budgets.map((b) => b.category.key).toList();
-    await _db.from('budgets').upsert(
-          budgets
-              .map((b) => {
-                    'id': b.id,
-                    'user_id': _uid,
-                    'category': b.category.key,
-                    'limit_amount': b.limit,
-                    'currency': b.currency,
-                  })
-              .toList(),
-          onConflict: 'user_id,category',
-        );
-    if (keep.isNotEmpty) {
-      await _db
-          .from('budgets')
-          .delete()
-          .eq('user_id', _uid)
-          .not('category', 'in', '(${keep.join(',')})');
+  Future<void> saveMonthlyReviewCache(
+      String yearMonth, MonthlyReview review) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        'review_cache_$yearMonth', jsonEncode(review.toJson()));
+  }
+
+  @override
+  Future<YearlyReview?> loadYearlyReviewCache(int year) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('yearly_cache_$year');
+    if (raw == null) return null;
+    try {
+      return YearlyReview.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
     }
+  }
+
+  @override
+  Future<void> saveYearlyReviewCache(int year, YearlyReview review) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('yearly_cache_$year', jsonEncode(review.toJson()));
   }
 
   // ---- Helpers ----

@@ -42,11 +42,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           'always know where your money goes.',
     ),
     _Slide(
-      Icons.savings_outlined,
+      Icons.insights_outlined,
       AppTheme.accent,
-      'Stay on budget',
-      'Set category budgets, get alerts before you overspend, and let your AI '
-          'coach surface smart insights each month.',
+      'Know where your money goes',
+      'Track spending trends, explore top merchants, and get a personalised AI '
+          'review every month — all in one place.',
     ),
   ];
 

@@ -160,7 +160,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
               ),
             )
           : Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [

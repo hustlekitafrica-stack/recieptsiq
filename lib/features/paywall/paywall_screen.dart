@@ -194,7 +194,7 @@ class _PaywallHero extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         const Text(
-          'AI receipt scanning, smart budgets, and monthly financial reviews — available across Africa via M-Pesa, MTN MoMo, Airtel, and cards.',
+          'AI receipt scanning, spending analytics, and monthly financial reviews — available across Africa via M-Pesa, MTN MoMo, Airtel, and cards.',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.4),
         ),
@@ -308,8 +308,8 @@ class _TierCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       caps.isUnlimitedScans
-                          ? 'Unlimited scans · Unlimited budgets'
-                          : '${caps.maxScansPerMonth} scans · ${caps.maxBudgets} budgets / month',
+                          ? 'Unlimited scans'
+                          : '${caps.maxScansPerMonth} scans / month',
                       style: const TextStyle(
                           color: Color(0xFF64748B), fontSize: 12),
                     ),
@@ -345,7 +345,7 @@ class _FeatureTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final rows = [
       _FeatureRow('Receipt scans / month', '5', '50', 'Unlimited'),
-      _FeatureRow('Budgets', '1', '5', 'Unlimited'),
+      _FeatureRow('Analytics history', '30 days', '6 months', 'All time'),
       _FeatureRow('Receipt history', '30 days', '6 months', 'All time'),
       _FeatureRow('AI Monthly Review', null, '✓', '✓'),
       _FeatureRow('Full AI Insights', null, '✓', '✓'),
