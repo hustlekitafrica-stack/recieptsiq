@@ -58,9 +58,40 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
       await _process(File(pictures.first));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Scanner error: $e')),
-      );
+      final msg = e.toString().toLowerCase();
+      final isNativeError = msg.contains('null') ||
+          msg.contains('platformexception') ||
+          msg.contains('nullpointer');
+      if (isNativeError) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Camera scanner unavailable'),
+            content: const Text(
+              'The document scanner could not start on this device. '
+              'You can still scan by picking an image from your gallery.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton.icon(
+                icon: const Icon(Icons.photo_library_outlined),
+                label: const Text('Use gallery'),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _pickFromGallery();
+                },
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Scanner error: $e')),
+        );
+      }
     }
   }
 
@@ -108,8 +139,34 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+      final msg = e.toString().toLowerCase();
+      final noText = msg.contains('no text') || msg.contains('no text detected');
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(noText ? 'Receipt not readable' : 'Scan failed'),
+          content: Text(
+            noText
+                ? 'No text could be read from this image. '
+                    'Try retaking with better lighting, or enter the receipt details manually.'
+                : 'Something went wrong: $e\n\nYou can try again or enter the details manually.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Try again'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                final draft = ReceiptDraft.empty(currency)
+                  ..imagePath = image.path;
+                context.pushReplacement('/review', extra: draft);
+              },
+              child: const Text('Enter manually'),
+            ),
+          ],
+        ),
       );
     }
   }
@@ -159,7 +216,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                 ],
               ),
             )
-          : Padding(
+          : SafeArea(
+              child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -235,6 +293,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                   ),
                 ],
               ),
+            ),
             ),
     );
   }

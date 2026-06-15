@@ -37,6 +37,15 @@ class OcrService {
         fileOptions: const FileOptions(upsert: true),
       );
     } catch (e) {
+      final msg = e.toString();
+      if (msg.contains('403') ||
+          msg.contains('Unauthorized') ||
+          msg.contains('row-level security')) {
+        throw OcrException(
+          'Storage permission denied (403). '
+          'Please ask the developer to enable RLS upload policies on the ocr-temp bucket in Supabase.',
+        );
+      }
       throw OcrException('Failed to upload image: $e');
     }
 
