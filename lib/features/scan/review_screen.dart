@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../../app/providers.dart';
 import '../../core/money.dart';
 import '../../data/models/category.dart';
+import '../../data/models/line_item.dart';
 import '../../data/models/receipt.dart';
 import '../../data/models/receipt_draft.dart';
 
@@ -25,8 +26,8 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
   late final TextEditingController _total;
   late final TextEditingController _vat;
   late DateTime _date;
-  late Category _category;
   late String _currency;
+  late List<LineItem> _items;
 
   @override
   void initState() {
@@ -38,8 +39,10 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     _vat = TextEditingController(
         text: (d.vat == null || d.vat == 0) ? '' : d.vat!.toStringAsFixed(2));
     _date = d.date;
-    _category = d.category;
     _currency = d.currency;
+    _items = List<LineItem>.from(d.items.map((it) => it.copyWith(
+          category: it.category ?? Category.other,
+        )));
   }
 
   @override
@@ -48,6 +51,26 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     _total.dispose();
     _vat.dispose();
     super.dispose();
+  }
+
+  /// Picks the most-frequent item category; used as the receipt-level category
+  /// so analytics and budgets continue to work without user input.
+  Category _dominantCategory() {
+    if (_items.isEmpty) return Category.other;
+    final freq = <String, int>{};
+    for (final it in _items) {
+      final key = it.category?.key ?? Category.other.key;
+      freq[key] = (freq[key] ?? 0) + 1;
+    }
+    final topKey =
+        freq.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+    return _items
+            .firstWhere(
+              (i) => (i.category?.key ?? Category.other.key) == topKey,
+              orElse: () => _items.first,
+            )
+            .category ??
+        Category.other;
   }
 
   Future<void> _save() async {
@@ -64,8 +87,8 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
       date: _date,
       total: Money(total, _currency),
       vat: (vat != null && vat > 0) ? Money(vat, _currency) : null,
-      category: _category,
-      items: widget.draft.items,
+      category: _dominantCategory(),
+      items: _items,
       imagePath: widget.draft.imagePath,
       rawText: widget.draft.rawText,
       createdAt: DateTime.now(),
@@ -77,6 +100,62 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
       const SnackBar(content: Text('Receipt saved')),
     );
     context.go('/receipts');
+  }
+
+  Future<void> _pickItemCategory(int index) async {
+    final current = _items[index].category ?? Category.other;
+    final allOptions = {current, ...Category.predefined}.toList();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+              child: Text('Category for "${_items[index].name}"',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 15)),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: allOptions.length,
+                itemBuilder: (_, i) {
+                  final cat = allOptions[i];
+                  final selected = cat == current;
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: cat.color.withValues(alpha: 0.15),
+                      child: Icon(cat.icon, color: cat.color, size: 20),
+                    ),
+                    title: Text(cat.label,
+                        style: TextStyle(
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.normal)),
+                    trailing:
+                        selected ? const Icon(Icons.check, size: 18) : null,
+                    onTap: () {
+                      setState(() {
+                        _items[index] = _items[index].copyWith(category: cat);
+                      });
+                      Navigator.of(ctx).pop();
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -152,8 +231,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                       keyboardType: const TextInputType.numberWithOptions(
                           decimal: true),
                       inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                            RegExp(r'[0-9.]'))
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))
                       ],
                     ),
                   ],
@@ -170,8 +248,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                       keyboardType: const TextInputType.numberWithOptions(
                           decimal: true),
                       inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                            RegExp(r'[0-9.]'))
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))
                       ],
                     ),
                   ],
@@ -179,44 +256,57 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          _label('Category'),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: {
-              // Always include the AI-assigned category first, then predefined
-              _category,
-              ...Category.predefined,
-            }.map((c) {
-              final selected = c == _category;
-              return ChoiceChip(
-                selected: selected,
-                onSelected: (_) => setState(() => _category = c),
-                avatar: Icon(c.icon,
-                    size: 18,
-                    color: selected ? Colors.white : c.color),
-                label: Text(c.label),
-                selectedColor: c.color,
-                labelStyle: TextStyle(
-                    color: selected ? Colors.white : const Color(0xFF334155),
-                    fontWeight: FontWeight.w600),
-              );
-            }).toList(),
-          ),
-          if (d.items.isNotEmpty) ...[
+          if (_items.isNotEmpty) ...[
             const SizedBox(height: 18),
-            _label('Items (${d.items.length})'),
+            _label('Items (${_items.length})'),
             const SizedBox(height: 4),
-            ...d.items.map((it) => ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(it.name),
-                  trailing: Text(
-                    '${it.quantity % 1 == 0 ? it.quantity.toInt() : it.quantity} x '
-                    '${Money(it.unitPrice, _currency).format()}',
-                  ),
-                )),
+            ..._items.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final it = entry.value;
+              final cat = it.category ?? Category.other;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(it.name,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w500)),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${it.quantity % 1 == 0 ? it.quantity.toInt() : it.quantity}'
+                            ' x ${Money(it.unitPrice, _currency).format()}',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600),
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => _pickItemCategory(idx),
+                      child: Chip(
+                        avatar: Icon(cat.icon, size: 14, color: cat.color),
+                        label: Text(cat.label,
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: cat.color,
+                                fontWeight: FontWeight.w600)),
+                        backgroundColor: cat.color.withValues(alpha: 0.1),
+                        side: BorderSide(color: cat.color.withValues(alpha: 0.3)),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        materialTapTargetSize:
+                            MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
           ],
           const SizedBox(height: 24),
           SizedBox(

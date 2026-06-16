@@ -78,8 +78,12 @@ create table if not exists public.line_items (
   name        text not null default '',
   quantity    numeric not null default 1,
   unit_price  numeric not null default 0,
-  amount      numeric not null default 0
+  amount      numeric not null default 0,
+  category    text not null default 'other'
 );
+
+alter table public.line_items
+  add column if not exists category text not null default 'other';
 
 create table if not exists public.budgets (
   id            uuid primary key default gen_random_uuid(),

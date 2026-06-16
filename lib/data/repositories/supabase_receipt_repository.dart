@@ -155,6 +155,7 @@ class SupabaseReceiptRepository implements ReceiptRepository {
               'quantity': it.quantity,
               'unit_price': it.unitPrice,
               'amount': it.amount,
+              'category': it.category?.key ?? 'other',
             })
         .toList());
   }
@@ -187,6 +188,7 @@ class SupabaseReceiptRepository implements ReceiptRepository {
               quantity: (e['quantity'] as num?)?.toDouble() ?? 1,
               unitPrice: (e['unit_price'] as num?)?.toDouble() ?? 0,
               amount: (e['amount'] as num?)?.toDouble() ?? 0,
+              category: Category.fromKey(e['category'] as String?),
             ))
         .toList();
 
