@@ -1,7 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:uuid/uuid.dart';
 
 class OcrException implements Exception {
   final String message;
@@ -10,17 +10,12 @@ class OcrException implements Exception {
   String toString() => 'OcrException: $message';
 }
 
-/// Reads raw text from a receipt image via the [scan-ocr] Supabase Edge Function.
+/// Reads raw text from a receipt image by sending the image bytes directly
+/// to the [scan-ocr] Edge Function as base64.
 ///
-/// Flow:
-///   1. Upload image to the private `ocr-temp` Storage bucket.
-///   2. Call the Edge Function with the storage path.
-///   3. The function downloads the image server-side, calls Google Vision,
-///      deletes the temp file, and returns the extracted text.
+/// No storage bucket required — the image never needs to be uploaded/downloaded.
 class OcrService {
-  static const _bucket = 'ocr-temp';
-  static const _fn     = 'scan-ocr';
-  static const _uuid   = Uuid();
+  static const _fn = 'scan-ocr';
 
   SupabaseClient get _sb => Supabase.instance.client;
 
@@ -28,32 +23,13 @@ class OcrService {
     final uid = _sb.auth.currentUser?.id;
     if (uid == null) throw OcrException('Not signed in — cannot scan.');
 
-    // ── 1. Upload to temp bucket ──────────────────────────────────────────
-    final tempPath = '$uid/${_uuid.v4()}.jpg';
-    try {
-      await _sb.storage.from(_bucket).upload(
-        tempPath,
-        image,
-        fileOptions: const FileOptions(upsert: true),
-      );
-    } catch (e) {
-      final msg = e.toString();
-      if (msg.contains('403') ||
-          msg.contains('Unauthorized') ||
-          msg.contains('row-level security')) {
-        throw OcrException(
-          'Storage permission denied (403). '
-          'Please ask the developer to enable RLS upload policies on the ocr-temp bucket in Supabase.',
-        );
-      }
-      throw OcrException('Failed to upload image: $e');
-    }
+    final bytes = await image.readAsBytes();
+    final base64Image = base64Encode(bytes);
 
-    // ── 2. Invoke Edge Function ───────────────────────────────────────────
     try {
       final res = await _sb.functions.invoke(
         _fn,
-        body: {'storage_path': tempPath},
+        body: {'image_base64': base64Image},
       );
       final data = res.data as Map?;
       if (data?['error'] != null) {
@@ -61,13 +37,17 @@ class OcrService {
       }
       final text = data?['text'] as String?;
       if (text == null || text.trim().isEmpty) {
-        throw OcrException('Could not read any text from this receipt.');
+        throw OcrException(
+          'No text could be read from this image. '
+          'Make sure the receipt is flat, well-lit, and fully in frame.',
+        );
       }
       return text;
+    } on OcrException {
+      rethrow;
     } on FunctionException catch (e) {
       throw OcrException('OCR request failed: ${e.details}');
     } catch (e) {
-      if (e is OcrException) rethrow;
       throw OcrException('OCR request failed: $e');
     }
   }

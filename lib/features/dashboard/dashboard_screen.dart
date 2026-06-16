@@ -367,7 +367,9 @@ class _StatRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return IntrinsicHeight(
+      child: Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
           child: _StatCard(
@@ -391,6 +393,7 @@ class _StatRow extends StatelessWidget {
           ),
         ),
       ],
+      ),
     );
   }
 }

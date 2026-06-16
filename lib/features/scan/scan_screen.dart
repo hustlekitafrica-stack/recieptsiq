@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:cunning_document_scanner/cunning_document_scanner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -46,53 +45,17 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     return true;
   }
 
-  // ── Document scanner (CamScanner-style) ──────────────────────────────────
+  // ── Native camera capture ─────────────────────────────────────────────────
   Future<void> _scanDocument() async {
     if (!_checkScanLimit()) return;
-    try {
-      final pictures = await CunningDocumentScanner.getPictures(
-        noOfPages: 1,
-        isGalleryImportAllowed: false,
-      );
-      if (pictures == null || pictures.isEmpty) return;
-      await _process(File(pictures.first));
-    } catch (e) {
-      if (!mounted) return;
-      final msg = e.toString().toLowerCase();
-      final isNativeError = msg.contains('null') ||
-          msg.contains('platformexception') ||
-          msg.contains('nullpointer');
-      if (isNativeError) {
-        showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Camera scanner unavailable'),
-            content: const Text(
-              'The document scanner could not start on this device. '
-              'You can still scan by picking an image from your gallery.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
-              ),
-              FilledButton.icon(
-                icon: const Icon(Icons.photo_library_outlined),
-                label: const Text('Use gallery'),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _pickFromGallery();
-                },
-              ),
-            ],
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Scanner error: $e')),
-        );
-      }
-    }
+    final XFile? file = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 90,
+      maxWidth: 2400,
+      preferredCameraDevice: CameraDevice.rear,
+    );
+    if (file == null) return;
+    await _process(File(file.path));
   }
 
   // ── Gallery fallback ──────────────────────────────────────────────────────
@@ -140,7 +103,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       final msg = e.toString().toLowerCase();
-      final noText = msg.contains('no text') || msg.contains('no text detected');
+      final noText = msg.contains('no text') || msg.contains('could not read');
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -148,22 +111,13 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
           content: Text(
             noText
                 ? 'No text could be read from this image. '
-                    'Try retaking with better lighting, or enter the receipt details manually.'
-                : 'Something went wrong: $e\n\nYou can try again or enter the details manually.',
+                    'Ensure the receipt is flat, well-lit, and fully in frame, then try again.'
+                : 'Something went wrong: $e\n\nPlease try again.',
           ),
           actions: [
-            TextButton(
+            FilledButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Try again'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                final draft = ReceiptDraft.empty(currency)
-                  ..imagePath = image.path;
-                context.pushReplacement('/review', extra: draft);
-              },
-              child: const Text('Enter manually'),
             ),
           ],
         ),
@@ -245,8 +199,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Point the camera at a receipt. Edge detection will auto-crop '
-                    'and correct the perspective — just like a desktop scanner.',
+                    'Point your camera at a receipt and take a photo. '
+                    'AI will read and extract all the details automatically.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium
                         ?.copyWith(color: const Color(0xFF64748B)),
@@ -259,21 +213,21 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                     runSpacing: 8,
                     children: const [
                       _FeatureChip(
-                          icon: Icons.crop_free, label: 'Auto edge detect'),
+                          icon: Icons.camera_alt_outlined, label: 'Native camera'),
                       _FeatureChip(
-                          icon: Icons.flip_camera_android_outlined,
-                          label: 'Perspective fix'),
+                          icon: Icons.auto_awesome_outlined,
+                          label: 'AI-powered reading'),
                       _FeatureChip(
-                          icon: Icons.auto_fix_high_outlined,
-                          label: 'Smart crop'),
+                          icon: Icons.receipt_long_outlined,
+                          label: 'Auto-extraction'),
                     ],
                   ),
                   const Spacer(),
                   // ── Primary: document scanner ──────────────────────────
                   FilledButton.icon(
                     onPressed: _scanDocument,
-                    icon: const Icon(Icons.document_scanner_outlined),
-                    label: const Text('Scan document'),
+                    icon: const Icon(Icons.camera_alt_outlined),
+                    label: const Text('Take photo'),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(52),
                     ),

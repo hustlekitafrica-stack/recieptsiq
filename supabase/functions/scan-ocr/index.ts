@@ -3,21 +3,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL        = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const VISION_KEY          = Deno.env.get('GOOGLE_VISION_API_KEY')!;
+const OPENAI_API_KEY      = Deno.env.get('OPENAI_API_KEY')!;
+const OPENAI_MODEL        = Deno.env.get('OPENAI_MODEL') ?? 'gpt-4o-mini';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-function toBase64(bytes: Uint8Array): string {
-  let binary = '';
-  const chunkSize = 8192;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  }
-  return btoa(binary);
-}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -33,43 +25,49 @@ serve(async (req) => {
       });
     }
 
-    const { storage_path } = await req.json() as { storage_path: string };
-    if (!storage_path) {
-      return new Response(JSON.stringify({ error: 'storage_path is required' }), {
+    const body = await req.json() as { image_base64?: string };
+    const base64Image = body.image_base64;
+    if (!base64Image) {
+      return new Response(JSON.stringify({ error: 'image_base64 is required' }), {
         status: 400, headers: corsHeaders,
       });
     }
 
-    const { data: fileBlob, error: storageErr } = await supabase.storage
-      .from('ocr-temp').download(storage_path);
-    if (storageErr || !fileBlob) throw new Error(`Storage download failed: ${storageErr?.message}`);
+    if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY secret is not configured.');
 
-    const imageBytes = new Uint8Array(await fileBlob.arrayBuffer());
-    const base64Image = toBase64(imageBytes);
-
-    const visionRes = await fetch(
-      `https://vision.googleapis.com/v1/images:annotate?key=${VISION_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          requests: [{
-            image: { content: base64Image },
-            features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
-            imageContext: { languageHints: ['en'] },
-          }],
-        }),
+    const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
       },
-    );
-    const visionData = await visionRes.json();
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        max_tokens: 2000,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: { url: `data:image/jpeg;base64,${base64Image}`, detail: 'high' },
+            },
+            {
+              type: 'text',
+              text: 'Extract ALL text from this receipt image exactly as printed. Return only the raw text, preserving line breaks. No explanation, no formatting, just the text.',
+            },
+          ],
+        }],
+      }),
+    });
 
-    await supabase.storage.from('ocr-temp').remove([storage_path]).catch(() => {});
+    if (!aiRes.ok) {
+      const errBody = await aiRes.json().catch(() => ({}));
+      throw new Error(`OpenAI error ${aiRes.status}: ${errBody?.error?.message ?? aiRes.statusText}`);
+    }
 
-    const response0 = visionData.responses?.[0];
-    if (response0?.error) throw new Error(`Vision API error: ${response0.error.message}`);
-
-    const text: string = response0?.fullTextAnnotation?.text ?? '';
-    if (!text.trim()) throw new Error('No text detected in this image.');
+    const aiData = await aiRes.json();
+    const text: string = aiData.choices?.[0]?.message?.content?.trim() ?? '';
+    if (!text) throw new Error('Could not read any text from this image. Ensure the receipt is well-lit and fully in frame.');
 
     return new Response(JSON.stringify({ text }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

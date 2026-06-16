@@ -60,7 +60,8 @@ class _ReviewBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      padding: EdgeInsets.fromLTRB(16, 8, 16,
+          32 + MediaQuery.of(context).padding.bottom),
       children: [
         // Month label + tone badge
         Row(
