@@ -85,7 +85,8 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Review receipt')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        padding: EdgeInsets.fromLTRB(
+            16, 8, 16, 24 + MediaQuery.of(context).padding.bottom),
         children: [
           if (d.imagePath != null && File(d.imagePath!).existsSync())
             ClipRRect(

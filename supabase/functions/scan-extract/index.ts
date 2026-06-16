@@ -35,7 +35,13 @@ Schema:
 Rules:
 - Numbers are plain numbers (no currency symbols or thousands separators).
 - If a field is missing use a sensible default (0, null, or "${currency}").
-- Pick the single best category from: ${CATEGORIES}.`;
+- Pick the single best category from: ${CATEGORIES}.
+- VAT: always extract or calculate vat when possible. Never leave it null if tax information exists.
+  * If the receipt shows a VAT/Tax total line, use that value.
+  * Kenyan receipts use tax codes on line items: A = 16% VAT, B = 8% VAT, E/F = exempt (0%).
+    Sum the VAT amounts for all taxable items (amount / 1.16 * 0.16 for code A items).
+  * If a VAT registration number (PIN) or "TAX INVOICE" heading appears, VAT is likely included in the total — compute it.
+  * Only set vat to null if the receipt is clearly VAT-exempt with no tax at all.`;
 }
 
 serve(async (req) => {
