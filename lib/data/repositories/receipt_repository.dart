@@ -74,7 +74,7 @@ class LocalReceiptRepository implements ReceiptRepository {
   @override
   Future<MonthlyReview?> loadMonthlyReviewCache(String yearMonth) async {
     final prefs = await _prefs;
-    final raw = prefs.getString('review_cache_$yearMonth');
+    final raw = prefs.getString('anon_review_cache_$yearMonth');
     if (raw == null) return null;
     try {
       return MonthlyReview.fromJson(
@@ -89,19 +89,19 @@ class LocalReceiptRepository implements ReceiptRepository {
       String yearMonth, MonthlyReview review) async {
     final prefs = await _prefs;
     await prefs.setString(
-        'review_cache_$yearMonth', jsonEncode(review.toJson()));
+        'anon_review_cache_$yearMonth', jsonEncode(review.toJson()));
   }
 
   @override
   Future<void> clearMonthlyReviewCache(String yearMonth) async {
     final prefs = await _prefs;
-    await prefs.remove('review_cache_$yearMonth');
+    await prefs.remove('anon_review_cache_$yearMonth');
   }
 
   @override
   Future<YearlyReview?> loadYearlyReviewCache(int year) async {
     final prefs = await _prefs;
-    final raw = prefs.getString('yearly_cache_$year');
+    final raw = prefs.getString('anon_yearly_cache_$year');
     if (raw == null) return null;
     try {
       return YearlyReview.fromJson(
@@ -114,7 +114,7 @@ class LocalReceiptRepository implements ReceiptRepository {
   @override
   Future<void> saveYearlyReviewCache(int year, YearlyReview review) async {
     final prefs = await _prefs;
-    await prefs.setString('yearly_cache_$year', jsonEncode(review.toJson()));
+    await prefs.setString('anon_yearly_cache_$year', jsonEncode(review.toJson()));
   }
 
   // ---- Data management ----

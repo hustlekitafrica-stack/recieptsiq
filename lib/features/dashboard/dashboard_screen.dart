@@ -84,6 +84,20 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
               ],
+              if (!devProMode) ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      context.push('/paywall');
+                    },
+                    icon: const Icon(Icons.rocket_launch_outlined, size: 16),
+                    label: const Text('View plans'),
+                  ),
+                ),
+              ],
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,

@@ -102,7 +102,7 @@ class SupabaseReceiptRepository implements ReceiptRepository {
   @override
   Future<MonthlyReview?> loadMonthlyReviewCache(String yearMonth) async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('review_cache_$yearMonth');
+    final raw = prefs.getString('review_cache_${_uid}_$yearMonth');
     if (raw == null) return null;
     try {
       return MonthlyReview.fromJson(jsonDecode(raw) as Map<String, dynamic>);
@@ -116,19 +116,19 @@ class SupabaseReceiptRepository implements ReceiptRepository {
       String yearMonth, MonthlyReview review) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-        'review_cache_$yearMonth', jsonEncode(review.toJson()));
+        'review_cache_${_uid}_$yearMonth', jsonEncode(review.toJson()));
   }
 
   @override
   Future<void> clearMonthlyReviewCache(String yearMonth) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('review_cache_$yearMonth');
+    await prefs.remove('review_cache_${_uid}_$yearMonth');
   }
 
   @override
   Future<YearlyReview?> loadYearlyReviewCache(int year) async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('yearly_cache_$year');
+    final raw = prefs.getString('yearly_cache_${_uid}_$year');
     if (raw == null) return null;
     try {
       return YearlyReview.fromJson(jsonDecode(raw) as Map<String, dynamic>);
@@ -140,7 +140,7 @@ class SupabaseReceiptRepository implements ReceiptRepository {
   @override
   Future<void> saveYearlyReviewCache(int year, YearlyReview review) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('yearly_cache_$year', jsonEncode(review.toJson()));
+    await prefs.setString('yearly_cache_${_uid}_$year', jsonEncode(review.toJson()));
   }
 
   // ---- Helpers ----

@@ -107,7 +107,7 @@ final _reviewInvalidateProvider = StateProvider<int>((ref) => 0);
 final monthlyReviewProvider =
     FutureProvider.autoDispose.family<MonthlyReview?, DateTime>((ref, month) async {
   ref.watch(_reviewInvalidateProvider);
-  final repo = ref.read(repositoryProvider);
+  final repo = ref.watch(repositoryProvider);
   final service = ref.read(extractionServiceProvider);
   final currency = ref.read(displayCurrencyProvider);
 
@@ -151,7 +151,7 @@ void invalidateMonthlyReview(Ref ref) {
 /// Cache-first: stored in SharedPreferences, generated on first view.
 final yearlyReviewProvider =
     FutureProvider.autoDispose.family<YearlyReview?, int>((ref, year) async {
-  final repo = ref.read(repositoryProvider);
+  final repo = ref.watch(repositoryProvider);
   final service = ref.read(extractionServiceProvider);
   final currency = ref.read(displayCurrencyProvider);
 
