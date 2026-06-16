@@ -93,6 +93,12 @@ class LocalReceiptRepository implements ReceiptRepository {
   }
 
   @override
+  Future<void> clearMonthlyReviewCache(String yearMonth) async {
+    final prefs = await _prefs;
+    await prefs.remove('review_cache_$yearMonth');
+  }
+
+  @override
   Future<YearlyReview?> loadYearlyReviewCache(int year) async {
     final prefs = await _prefs;
     final raw = prefs.getString('yearly_cache_$year');

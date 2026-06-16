@@ -6,18 +6,55 @@ import '../../app/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/monthly_review.dart';
 
-class MonthlyReviewScreen extends ConsumerWidget {
+class MonthlyReviewScreen extends ConsumerStatefulWidget {
   const MonthlyReviewScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MonthlyReviewScreen> createState() => _MonthlyReviewScreenState();
+}
+
+class _MonthlyReviewScreenState extends ConsumerState<MonthlyReviewScreen> {
+  bool _refreshing = false;
+
+  Future<void> _refresh() async {
+    final now = DateTime.now();
+    final month = DateTime(now.year, now.month);
+    final cacheKey = '${month.year}_${month.month.toString().padLeft(2, '0')}';
+    setState(() => _refreshing = true);
+    try {
+      await ref.read(repositoryProvider).clearMonthlyReviewCache(cacheKey);
+      ref.invalidate(monthlyReviewProvider(month));
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final now = DateTime.now();
     final month = DateTime(now.year, now.month);
     final reviewAsync = ref.watch(monthlyReviewProvider(month));
     final monthLabel = DateFormat.yMMMM().format(now);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Monthly Review')),
+      appBar: AppBar(
+        title: const Text('Monthly Review'),
+        actions: [
+          _refreshing
+              ? const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.refresh_rounded),
+                  tooltip: 'Regenerate',
+                  onPressed: _refresh,
+                ),
+        ],
+      ),
       body: reviewAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => _ErrorBody(error: e.toString()),

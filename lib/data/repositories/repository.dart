@@ -15,6 +15,7 @@ abstract class ReceiptRepository {
   // ---- Review cache ----
   Future<MonthlyReview?> loadMonthlyReviewCache(String yearMonth);
   Future<void> saveMonthlyReviewCache(String yearMonth, MonthlyReview review);
+  Future<void> clearMonthlyReviewCache(String yearMonth);
   Future<YearlyReview?> loadYearlyReviewCache(int year);
   Future<void> saveYearlyReviewCache(int year, YearlyReview review);
 }
