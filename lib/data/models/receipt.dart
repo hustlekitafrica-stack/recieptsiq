@@ -10,7 +10,7 @@ class Receipt {
   final DateTime date;
   final Money total;
   final Money? vat;
-  final ExpenseCategory category;
+  final Category category;
   final List<LineItem> items;
   final String? imagePath;
   final String? rawText;
@@ -39,7 +39,7 @@ class Receipt {
     DateTime? date,
     Money? total,
     Money? vat,
-    ExpenseCategory? category,
+    Category? category,
     List<LineItem>? items,
     String? imagePath,
     String? notes,
@@ -85,7 +85,7 @@ class Receipt {
         vat: json['vat'] == null
             ? null
             : Money.fromJson((json['vat'] as Map).cast<String, dynamic>()),
-        category: ExpenseCategoryX.fromKey(json['category'] as String?),
+        category: Category.fromKey(json['category'] as String?),
         items: (json['items'] as List? ?? [])
             .map((e) => LineItem.fromJson((e as Map).cast<String, dynamic>()))
             .toList(),

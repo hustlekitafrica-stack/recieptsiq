@@ -8,11 +8,11 @@ import '../../data/models/receipt.dart';
 class SpendingAnalytics {
   final double monthlySpend;
   final double lastMonthSpend;
-  final ExpenseCategory? biggestCategory;
+  final Category? biggestCategory;
   final double biggestCategoryAmount;
   final String? topMerchant;
   final double averageDailySpend;
-  final Map<ExpenseCategory, double> byCategory;
+  final Map<Category, double> byCategory;
   final int receiptCount;
 
   const SpendingAnalytics({
@@ -43,17 +43,26 @@ class SpendingAnalytics {
     final lastMonth =
         receipts.where((r) => _sameMonth(r.date, lastMonthRef)).toList();
 
-    final byCategory = <ExpenseCategory, double>{};
+    final byCategory = <Category, double>{};
     final byMerchant = <String, double>{};
     double total = 0;
     for (final r in thisMonth) {
       final amt = r.total.amount;
       total += amt;
-      byCategory.update(r.category, (v) => v + amt, ifAbsent: () => amt);
       byMerchant.update(r.merchant, (v) => v + amt, ifAbsent: () => amt);
+
+      final categorisedItems = r.items.where((it) => it.category != null).toList();
+      if (categorisedItems.isNotEmpty) {
+        for (final it in r.items) {
+          final cat = it.category ?? r.category;
+          byCategory.update(cat, (v) => v + it.amount, ifAbsent: () => it.amount);
+        }
+      } else {
+        byCategory.update(r.category, (v) => v + amt, ifAbsent: () => amt);
+      }
     }
 
-    ExpenseCategory? biggestCat;
+    Category? biggestCat;
     double biggestAmt = 0;
     byCategory.forEach((k, v) {
       if (v > biggestAmt) {
@@ -96,7 +105,7 @@ class YearlyAnalytics {
   final double totalSpend;
   final double prevYearSpend;
   final Map<int, double> monthlyTotals;
-  final Map<ExpenseCategory, double> byCategory;
+  final Map<Category, double> byCategory;
   final Map<String, double> topMerchants;
   final int bestMonth;
   final int worstMonth;
@@ -124,7 +133,7 @@ class YearlyAnalytics {
     final prevYear = receipts.where((r) => r.date.year == year - 1).toList();
 
     final monthlyTotals = <int, double>{};
-    final byCategory = <ExpenseCategory, double>{};
+    final byCategory = <Category, double>{};
     final byMerchant = <String, double>{};
     double total = 0;
 
@@ -132,7 +141,15 @@ class YearlyAnalytics {
       final amt = r.total.amount;
       total += amt;
       monthlyTotals.update(r.date.month, (v) => v + amt, ifAbsent: () => amt);
-      byCategory.update(r.category, (v) => v + amt, ifAbsent: () => amt);
+      final categorisedItems = r.items.where((it) => it.category != null).toList();
+      if (categorisedItems.isNotEmpty) {
+        for (final it in r.items) {
+          final cat = it.category ?? r.category;
+          byCategory.update(cat, (v) => v + it.amount, ifAbsent: () => it.amount);
+        }
+      } else {
+        byCategory.update(r.category, (v) => v + amt, ifAbsent: () => amt);
+      }
       byMerchant.update(r.merchant, (v) => v + amt, ifAbsent: () => amt);
     }
 

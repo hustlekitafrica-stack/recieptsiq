@@ -117,11 +117,19 @@ class AnalyticsScreen extends ConsumerWidget {
     return result;
   }
 
-  Map<ExpenseCategory, double> _categoryTotals(List<Receipt> receipts) {
-    final map = <ExpenseCategory, double>{};
+  Map<Category, double> _categoryTotals(List<Receipt> receipts) {
+    final map = <Category, double>{};
     for (final r in receipts) {
-      map.update(r.category, (v) => v + r.total.amount,
-          ifAbsent: () => r.total.amount);
+      final categorisedItems = r.items.where((it) => it.category != null).toList();
+      if (categorisedItems.isNotEmpty) {
+        for (final it in r.items) {
+          final cat = it.category ?? r.category;
+          map.update(cat, (v) => v + it.amount, ifAbsent: () => it.amount);
+        }
+      } else {
+        map.update(r.category, (v) => v + r.total.amount,
+            ifAbsent: () => r.total.amount);
+      }
     }
     final sorted = map.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
@@ -324,7 +332,7 @@ class _MonthlyTrendChart extends StatelessWidget {
 // ── Category Row ──────────────────────────────────────────────────────────────
 
 class _CategoryRow extends StatelessWidget {
-  final ExpenseCategory category;
+  final Category category;
   final double amount;
   final double total;
   final String currency;
@@ -423,7 +431,7 @@ class _CategoryRow extends StatelessWidget {
 // ── Category Detail Sheet ─────────────────────────────────────────────────────
 
 class _CategoryDetailSheet extends StatelessWidget {
-  final ExpenseCategory category;
+  final Category category;
   final List<Receipt> receipts;
   final double totalSpend;
   final String currency;

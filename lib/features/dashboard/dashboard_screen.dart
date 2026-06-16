@@ -242,14 +242,6 @@ class DashboardScreen extends ConsumerWidget {
                     .map((r) => _RecentTile(receipt: r))
                     .toList();
               }(),
-              const SizedBox(height: 8),
-              Center(
-                child: TextButton.icon(
-                  onPressed: () => context.push('/history'),
-                  icon: const Icon(Icons.history, size: 18),
-                  label: const Text('View history'),
-                ),
-              ),
             ],
           );
         },

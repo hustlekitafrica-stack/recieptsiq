@@ -25,7 +25,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
   late final TextEditingController _total;
   late final TextEditingController _vat;
   late DateTime _date;
-  late ExpenseCategory _category;
+  late Category _category;
   late String _currency;
 
   @override
@@ -184,7 +184,11 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: ExpenseCategory.values.map((c) {
+            children: {
+              // Always include the AI-assigned category first, then predefined
+              _category,
+              ...Category.predefined,
+            }.map((c) {
               final selected = c == _category;
               return ChoiceChip(
                 selected: selected,

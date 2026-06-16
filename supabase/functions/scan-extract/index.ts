@@ -6,10 +6,6 @@ const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const OPENAI_API_KEY      = Deno.env.get('OPENAI_API_KEY')!;
 const OPENAI_MODEL        = Deno.env.get('OPENAI_MODEL') ?? 'gpt-4o-mini';
 
-const CATEGORIES =
-  'groceries, fuel, rent, utilities, transport, entertainment, ' +
-  'businessSupplies, staffExpenses, school, medical, other';
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -28,14 +24,19 @@ Schema:
   "currency": string,
   "category": string,
   "items": [
-    { "name": string, "quantity": number, "unit_price": number, "amount": number }
+    { "name": string, "quantity": number, "unit_price": number, "amount": number, "category": string }
   ]
 }
 
 Rules:
 - Numbers are plain numbers (no currency symbols or thousands separators).
 - If a field is missing use a sensible default (0, null, or "${currency}").
-- Pick the single best category from: ${CATEGORIES}.
+- Categories: assign a short, specific, descriptive category to EACH item and to the overall receipt.
+  Be specific rather than generic — use labels like "Dairy", "Fresh Produce", "Cleaning Supplies",
+  "Petrol", "Electricity", "School Fees", "Prescription Medication", "Airtime", "Clothing" etc.
+  Common broad labels are fine when specific ones don't apply: "Groceries", "Fuel", "Utilities",
+  "Transport", "Entertainment", "Rent", "Medical", "School", "Business Supplies", "Staff Expenses".
+  Never leave category blank — default to "Other" only if truly uncategorisable.
 - VAT: always extract or calculate vat when possible. Never leave it null if tax information exists.
   * If the receipt shows a VAT/Tax total line, use that value.
   * Kenyan receipts use tax codes on line items: A = 16% VAT, B = 8% VAT, E/F = exempt (0%).

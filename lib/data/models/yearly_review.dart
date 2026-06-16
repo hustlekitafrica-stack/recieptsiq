@@ -6,7 +6,7 @@ class YearlyReview {
   final int year;
   final double totalSpend;
   final Map<int, double> monthlyTotals;
-  final Map<ExpenseCategory, double> byCategory;
+  final Map<Category, double> byCategory;
   final Map<String, double> topMerchants;
   final int bestMonth;
   final int worstMonth;
@@ -39,12 +39,9 @@ class YearlyReview {
     };
 
     final rawCat = json['by_category'] as Map? ?? {};
-    final byCategory = <ExpenseCategory, double>{
+    final byCategory = <Category, double>{
       for (final e in rawCat.entries)
-        ExpenseCategory.values.firstWhere(
-          (c) => c.name == e.key.toString(),
-          orElse: () => ExpenseCategory.other,
-        ): (e.value as num).toDouble(),
+        Category.fromKey(e.key.toString()): (e.value as num).toDouble(),
     };
 
     final rawMerchants = json['top_merchants'] as Map? ?? {};
@@ -76,7 +73,7 @@ class YearlyReview {
           for (final e in monthlyTotals.entries) e.key.toString(): e.value,
         },
         'by_category': {
-          for (final e in byCategory.entries) e.key.name: e.value,
+          for (final e in byCategory.entries) e.key.key: e.value,
         },
         'top_merchants': topMerchants,
         'best_month': bestMonth,

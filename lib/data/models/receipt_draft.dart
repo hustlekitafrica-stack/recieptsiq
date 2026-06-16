@@ -9,7 +9,7 @@ class ReceiptDraft {
   double total;
   double? vat;
   String currency;
-  ExpenseCategory category;
+  Category category;
   List<LineItem> items;
   String? rawText;
   String? imagePath;
@@ -31,7 +31,7 @@ class ReceiptDraft {
         date: DateTime.now(),
         total: 0,
         currency: currency,
-        category: ExpenseCategory.other,
+        category: Category.other,
         items: [],
       );
 
@@ -64,7 +64,7 @@ class ReceiptDraft {
       currency: (currencyRaw != null && currencyRaw.isNotEmpty)
           ? currencyRaw.toUpperCase()
           : fallbackCurrency,
-      category: ExpenseCategoryX.fromKey(json['category'] as String?),
+      category: Category.fromKey(json['category'] as String?),
       items: items,
     );
   }

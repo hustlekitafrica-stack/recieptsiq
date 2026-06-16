@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -13,16 +12,26 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   static const _green = Color(0xFF25D366);
 
-  String? _completePhone;   // E.164 validated number set by IntlPhoneField
-  bool    _loading      = false;
-  bool    _demoLoading  = false;
-  bool    _valid        = false;
+  final _emailCtrl = TextEditingController();
+  bool    _loading     = false;
+  bool    _skipLoading  = false;
   String? _error;
 
   SupabaseClient get _sb => Supabase.instance.client;
 
-  Future<void> _demoSignIn() async {
-    setState(() { _demoLoading = true; _error = null; });
+  bool get _valid {
+    final e = _emailCtrl.text.trim();
+    return e.contains('@') && e.contains('.');
+  }
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _skip() async {
+    setState(() { _skipLoading = true; _error = null; });
     try {
       await _sb.auth.signInAnonymously();
       if (mounted) context.go('/dashboard');
@@ -31,22 +40,23 @@ class _AuthScreenState extends State<AuthScreen> {
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _demoLoading = false);
+      if (mounted) setState(() => _skipLoading = false);
     }
   }
 
   Future<void> _sendOtp() async {
-    if (!_valid || _completePhone == null) {
-      setState(() => _error = 'Enter a valid phone number.');
+    final email = _emailCtrl.text.trim();
+    if (!_valid) {
+      setState(() => _error = 'Enter a valid email address.');
       return;
     }
     setState(() { _loading = true; _error = null; });
     try {
       await _sb.auth.signInWithOtp(
-        phone: _completePhone!,
-        channel: OtpChannel.whatsapp,
+        email: email,
+        shouldCreateUser: true,
       );
-      if (mounted) context.push('/auth/phone', extra: _completePhone!);
+      if (mounted) context.push('/auth/phone', extra: email);
     } on AuthException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {
@@ -85,8 +95,8 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    "Enter your phone number to continue. We'll send "
-                    "you a one-time verification code on WhatsApp.",
+                    "Enter your email address to continue. We'll send "
+                    "you a one-time verification code.",
                     style: TextStyle(
                       fontSize: 15,
                       color: Color(0xFF64748B),
@@ -95,7 +105,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 32),
                   const Text(
-                    'Phone number',
+                    'Email address',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -103,18 +113,20 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  IntlPhoneField(
-                    initialCountryCode: 'KE',
-                    keyboardType: TextInputType.phone,
+                  TextField(
+                    controller: _emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.done,
+                    autocorrect: false,
                     onSubmitted: (_) => _sendOtp(),
+                    onChanged: (_) => setState(() => _error = null),
                     style: const TextStyle(fontSize: 16, color: Color(0xFF0F172A)),
-                    dropdownTextStyle: const TextStyle(
-                        fontSize: 16, color: Color(0xFF0F172A)),
                     decoration: InputDecoration(
-                      hintText: '700 000 000',
+                      hintText: 'you@example.com',
                       hintStyle:
                           const TextStyle(color: Color(0xFFCBD5E1), fontSize: 16),
+                      prefixIcon: const Icon(Icons.email_outlined,
+                          color: Color(0xFF94A3B8)),
                       filled: true,
                       fillColor: Colors.white,
                       contentPadding: const EdgeInsets.symmetric(
@@ -131,35 +143,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(color: _green, width: 2),
                       ),
-                      errorBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                            color: Color(0xFFDC2626), width: 1.5),
-                      ),
-                      focusedErrorBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                            color: Color(0xFFDC2626), width: 2),
-                      ),
                     ),
-                    onChanged: (phone) {
-                      setState(() {
-                        _error = null;
-                        try {
-                          _valid = phone.isValidNumber();
-                          _completePhone =
-                              _valid ? phone.completeNumber : null;
-                        } catch (_) {
-                          _valid = false;
-                          _completePhone = null;
-                        }
-                      });
-                    },
-                    onCountryChanged: (_) =>
-                        setState(() { _valid = false; _completePhone = null; }),
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    invalidNumberMessage: 'Invalid phone number for this country',
-                    disableLengthCheck: false,
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),
@@ -208,44 +192,29 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const Spacer(),
                   const Divider(color: Color(0xFFE2E8F0)),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: (_loading || _demoLoading) ? null : _demoSignIn,
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: _demoLoading
+                  const SizedBox(height: 8),
+                  Center(
+                    child: TextButton(
+                      onPressed: (_loading || _skipLoading) ? null : _skip,
+                      child: _skipLoading
                           ? const SizedBox(
-                              width: 18,
-                              height: 18,
+                              width: 16,
+                              height: 16,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Color(0xFF64748B)),
+                                  strokeWidth: 2,
+                                  color: Color(0xFF94A3B8)),
                             )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: const [
-                                Icon(Icons.science_outlined,
-                                    size: 18, color: Color(0xFF64748B)),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Try demo (no account needed)',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: Color(0xFF64748B),
-                                  ),
-                                ),
-                              ],
+                          : const Text(
+                              'Skip for now',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF94A3B8),
+                              ),
                             ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 4),
                   Center(
                     child: Text.rich(
                       TextSpan(

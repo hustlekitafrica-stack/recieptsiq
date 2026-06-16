@@ -54,21 +54,25 @@ List<Insight> generateInsights(List<Receipt> receipts, String currency) {
     }
   }
 
-  // Category-specific spend callout (fuel / eating out).
-  final fuel = a.byCategory[ExpenseCategory.fuel] ?? 0;
-  if (fuel > 0) {
+  // Category-specific spend callouts.
+  final fuelEntry = a.byCategory.entries
+      .cast<MapEntry<Category, double>?>()
+      .firstWhere((e) => e!.key.key == 'fuel', orElse: () => null);
+  if (fuelEntry != null && fuelEntry.value > 0) {
     insights.add(Insight(
-      'You spent ${Money(fuel, currency).format()} on fuel this month.',
-      ExpenseCategory.fuel.icon,
-      ExpenseCategory.fuel.color,
+      'You spent ${Money(fuelEntry.value, currency).format()} on fuel this month.',
+      Category.fuel.icon,
+      Category.fuel.color,
     ));
   }
-  final fun = a.byCategory[ExpenseCategory.entertainment] ?? 0;
-  if (fun > 0) {
+  final funEntry = a.byCategory.entries
+      .cast<MapEntry<Category, double>?>()
+      .firstWhere((e) => e!.key.key == 'entertainment', orElse: () => null);
+  if (funEntry != null && funEntry.value > 0) {
     insights.add(Insight(
-      'Eating out & entertainment cost you ${Money(fun, currency).format()}.',
-      ExpenseCategory.entertainment.icon,
-      ExpenseCategory.entertainment.color,
+      'Eating out & entertainment cost you ${Money(funEntry.value, currency).format()}.',
+      Category.entertainment.icon,
+      Category.entertainment.color,
     ));
   }
 

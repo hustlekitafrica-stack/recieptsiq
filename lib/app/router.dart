@@ -162,7 +162,7 @@ final _routes = <RouteBase>[
     GoRoute(
       path: '/auth/phone',
       parentNavigatorKey: _rootKey,
-      pageBuilder: (c, s) => _slidePage(PhoneOtpScreen(phone: s.extra as String? ?? '')),
+      pageBuilder: (c, s) => _slidePage(PhoneOtpScreen(email: s.extra as String? ?? '')),
     ),
     GoRoute(
       path: '/history',

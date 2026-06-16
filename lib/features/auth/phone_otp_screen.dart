@@ -6,8 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PhoneOtpScreen extends StatefulWidget {
-  final String phone;
-  const PhoneOtpScreen({super.key, required this.phone});
+  final String email;
+  const PhoneOtpScreen({super.key, required this.email});
 
   @override
   State<PhoneOtpScreen> createState() => _PhoneOtpScreenState();
@@ -51,8 +51,8 @@ class _PhoneOtpScreenState extends State<PhoneOtpScreen> {
     setState(() { _loading = true; _error = null; });
     try {
       await _sb.auth.signInWithOtp(
-        phone: widget.phone,
-        channel: OtpChannel.whatsapp,
+        email: widget.email,
+        shouldCreateUser: true,
       );
       _startCountdown();
     } on AuthException catch (e) {
@@ -69,9 +69,9 @@ class _PhoneOtpScreenState extends State<PhoneOtpScreen> {
     setState(() { _loading = true; _error = null; });
     try {
       await _sb.auth.verifyOTP(
-        phone: widget.phone,
+        email: widget.email,
         token: _otp,
-        type: OtpType.sms,
+        type: OtpType.email,
       );
       if (mounted) context.go('/dashboard');
     } on AuthException catch (e) {
@@ -105,7 +105,7 @@ class _PhoneOtpScreenState extends State<PhoneOtpScreen> {
             children: [
               const Spacer(),
               const Text(
-                'Verify your phone\nnumber',
+                'Check your\nemail',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w800,
@@ -120,9 +120,9 @@ class _PhoneOtpScreenState extends State<PhoneOtpScreen> {
                       fontSize: 15, color: Color(0xFF64748B), height: 1.5),
                   children: [
                     const TextSpan(
-                        text: "We've sent a verification code to "),
+                        text: "We've sent a 6-digit code to "),
                     TextSpan(
-                      text: widget.phone,
+                      text: widget.email,
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         color: Color(0xFF0F172A),
@@ -181,7 +181,7 @@ class _PhoneOtpScreenState extends State<PhoneOtpScreen> {
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2.5))
                       : const Text(
-                          'Verify phone number',
+                          'Verify email',
                           style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -222,7 +222,7 @@ class _PhoneOtpScreenState extends State<PhoneOtpScreen> {
               Center(
                 child: TextButton(
                   onPressed: () => context.pop(),
-                  child: const Text('Back to phone number',
+                  child: const Text('Back to email',
                       style: TextStyle(
                           color: _green, fontWeight: FontWeight.w600)),
                 ),

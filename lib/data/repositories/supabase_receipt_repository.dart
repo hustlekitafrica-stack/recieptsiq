@@ -209,7 +209,7 @@ class SupabaseReceiptRepository implements ReceiptRepository {
       vat: vatAmount == null
           ? null
           : Money(vatAmount, row['vat_currency'] as String? ?? currency),
-      category: ExpenseCategoryX.fromKey(row['category'] as String?),
+      category: Category.fromKey(row['category'] as String?),
       items: items,
       imagePath: displayImage,
       rawText: row['raw_text'] as String?,

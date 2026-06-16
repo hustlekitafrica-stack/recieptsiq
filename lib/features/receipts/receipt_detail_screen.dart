@@ -44,7 +44,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + MediaQuery.of(context).padding.bottom),
         children: [
           if (receipt.imagePath != null && receipt.imagePath!.isNotEmpty)
             ReceiptImage(source: receipt.imagePath),
@@ -77,25 +77,41 @@ class ReceiptDetailScreen extends ConsumerWidget {
                       : it.quantity.toString();
                   return ListTile(
                     title: Text(it.name),
-                    subtitle: Text(
-                        '$qty x ${Money(it.unitPrice, receipt.currency).format()}'),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('$qty x ${Money(it.unitPrice, receipt.currency).format()}'),
+                        if (it.category != null) ...[
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: it.category!.color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(it.category!.icon,
+                                    size: 11, color: it.category!.color),
+                                const SizedBox(width: 4),
+                                Text(it.category!.label,
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: it.category!.color,
+                                        fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                     trailing:
                         Text(Money(it.amount, receipt.currency).format()),
                   );
                 }).toList(),
               ),
-            ),
-          ],
-          if (receipt.rawText != null && receipt.rawText!.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            ExpansionTile(
-              title: const Text('Raw OCR text'),
-              childrenPadding: const EdgeInsets.all(16),
-              children: [
-                Text(receipt.rawText!,
-                    style: const TextStyle(
-                        fontFamily: 'monospace', fontSize: 12)),
-              ],
             ),
           ],
         ],
