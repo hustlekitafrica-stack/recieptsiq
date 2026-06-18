@@ -38,7 +38,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
   }
 
   void _showLimitReachedSheet() {
-    final user = Supabase.instance.client.auth.currentUser;
+    User? user;
+    try { user = Supabase.instance.client.auth.currentUser; } catch (_) {}
     final isAnon = user == null || user.isAnonymous;
 
     showModalBottomSheet(
@@ -302,7 +303,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     final usageLoaded = ref.watch(usageServiceProvider) != null;
     final canScan = ref.watch(canScanProvider);
     final isBlocked = usageLoaded && !canScan;
-    final user = Supabase.instance.client.auth.currentUser;
+    User? user;
+    try { user = Supabase.instance.client.auth.currentUser; } catch (_) {}
     final isAnon = user == null || user.isAnonymous;
 
     return Scaffold(

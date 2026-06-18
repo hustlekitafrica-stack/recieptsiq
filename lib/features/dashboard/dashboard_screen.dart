@@ -24,7 +24,8 @@ class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   static void _showAccountSheet(BuildContext context, WidgetRef ref) {
-    final user = Supabase.instance.client.auth.currentUser;
+    User? user;
+    try { user = Supabase.instance.client.auth.currentUser; } catch (_) {}
     final isAnon = user == null || user.isAnonymous;
     final display = user?.email ?? user?.phone ?? 'Guest account';
 
@@ -250,7 +251,8 @@ class DashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = Supabase.instance.client.auth.currentUser;
+    User? user;
+    try { user = Supabase.instance.client.auth.currentUser; } catch (_) {}
     final currency = ref.watch(displayCurrencyProvider);
     final receiptsAsync = ref.watch(receiptsProvider);
     final selectedMonth = ref.watch(selectedDashboardMonthProvider);
@@ -767,71 +769,83 @@ class _DualHero extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(24),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('This month',
-                    style: TextStyle(color: Colors.white70, fontSize: 13)),
-                const SizedBox(height: 4),
-                Text(
-                  Money(analytics.monthlySpend, currency).format(),
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800),
-                ),
-                if (analytics.trendPercent != null) ...[
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('This month',
+                      style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  const SizedBox(height: 4),
+                  Text(
+                    Money(analytics.monthlySpend, currency).format(),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800),
+                  ),
                   const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(
-                        (analytics.trendPercent ?? 0) >= 0
-                            ? Icons.trending_up
-                            : Icons.trending_down,
-                        color: Colors.white70,
-                        size: 14,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${(analytics.trendPercent ?? 0) >= 0 ? '+' : ''}${analytics.trendPercent!.toStringAsFixed(0)}% vs last month',
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 11),
-                      ),
-                    ],
+                  if (analytics.trendPercent != null)
+                    Row(
+                      children: [
+                        Icon(
+                          (analytics.trendPercent ?? 0) >= 0
+                              ? Icons.trending_up
+                              : Icons.trending_down,
+                          color: Colors.white70,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${(analytics.trendPercent ?? 0) >= 0 ? '+' : ''}${analytics.trendPercent!.toStringAsFixed(0)}% vs last month',
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 11),
+                        ),
+                      ],
+                    )
+                  else
+                    const Text('No prior month',
+                        style: TextStyle(color: Colors.white38, fontSize: 11)),
+                ],
+              ),
+            ),
+            Container(
+              width: 1,
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              color: Colors.white24,
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('You saved',
+                      style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  const SizedBox(height: 4),
+                  Text(
+                    Money(savings, currency).format(),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    savings > 0
+                        ? 'vs last month 🎉'
+                        : analytics.lastMonthSpend == 0
+                            ? 'No data to compare yet'
+                            : 'Try to reduce costs',
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 11),
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
-          Container(width: 1, height: 60, color: Colors.white24),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('You saved',
-                    style: TextStyle(color: Colors.white70, fontSize: 13)),
-                const SizedBox(height: 4),
-                Text(
-                  Money(savings, currency).format(),
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  savings > 0 ? 'vs last month' : 'Keep it up!',
-                  style: const TextStyle(
-                      color: Colors.white70, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -846,6 +860,43 @@ class _HealthScoreCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final caps = ref.watch(tierCapabilitiesProvider);
+    if (!score.hasData) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.brand.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.bar_chart_outlined,
+                    color: AppTheme.brand, size: 22),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Business Health Score',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 14)),
+                    SizedBox(height: 3),
+                    Text(
+                      'Scan at least 5 receipts to unlock your score',
+                      style:
+                          TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),

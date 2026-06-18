@@ -38,8 +38,19 @@ class PillarScore {
 class BusinessHealthScore {
   final int score;
   final List<PillarScore> pillars;
+  final bool hasData;
 
-  const BusinessHealthScore({required this.score, required this.pillars});
+  const BusinessHealthScore({
+    required this.score,
+    required this.pillars,
+    this.hasData = true,
+  });
+
+  static const noData = BusinessHealthScore(
+    score: 0,
+    pillars: [],
+    hasData: false,
+  );
 
   String get grade {
     if (score >= 80) return 'Excellent';
@@ -60,6 +71,7 @@ class BusinessHealthScore {
     double? monthlyBudget,
     DateTime? now,
   }) {
+    if (receipts.length < 5) return noData;
     final ref = now ?? DateTime.now();
     final p1 = _consistencyScore(receipts, ref);
     final p2 = _supplierControlScore(receipts, ref);

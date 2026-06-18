@@ -79,7 +79,8 @@ GoRouter createAppRouter({required bool onboarded}) {
         if (state.matchedLocation.startsWith('/auth')) return '/dashboard';
         return null;
       }
-      final user = Supabase.instance.client.auth.currentUser;
+      User? user;
+      try { user = Supabase.instance.client.auth.currentUser; } catch (_) {}
       final loggedIn = user != null;
       final onAuth = state.matchedLocation.startsWith('/auth');
       final onOnboarding = state.matchedLocation == '/onboarding';
