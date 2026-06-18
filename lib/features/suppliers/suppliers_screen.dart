@@ -4,9 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../app/providers.dart';
+import '../../app/subscription_provider.dart';
 import '../../core/money.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/receipt.dart';
+import '../../data/models/subscription_tier.dart';
+import '../paywall/upgrade_gate.dart';
 
 class _SupplierStat {
   final String name;
@@ -109,6 +112,23 @@ class SuppliersScreen extends ConsumerWidget {
     final receiptsAsync = ref.watch(receiptsProvider);
     final currency = ref.watch(displayCurrencyProvider);
     final now = DateTime.now();
+
+    final caps = ref.watch(tierCapabilitiesProvider);
+    if (!caps.supplierIntelligence) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Supplier Intelligence')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: UpgradeGate(
+              requiredTier: SubscriptionTier.starter,
+              featureName: 'Supplier Intelligence',
+              child: SizedBox.shrink(),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Supplier Intelligence')),

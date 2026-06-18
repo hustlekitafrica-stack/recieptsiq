@@ -16,20 +16,34 @@ class SubscriptionConfig {
   // ── Tier capabilities ─────────────────────────────────────────────────────
   static const free = TierCapabilities(
     tier: SubscriptionTier.free,
-    maxScansPerMonth: 5,
-    historyDays: 30,
+    maxScansPerMonth: 10,
+    historyDays: 90,
     aiMonthlyReview: false,
     fullAiInsights: false,
     csvExport: false,
+    pdfExport: false,
+    fullHealthScore: false,
+    maxLeaksShown: 1,
+    supplierIntelligence: false,
+    postScanInsight: false,
+    aiChatQueriesPerMonth: 0,
+    aiYearlyReview: false,
   );
 
   static const starter = TierCapabilities(
     tier: SubscriptionTier.starter,
     maxScansPerMonth: 50,
-    historyDays: 180,
+    historyDays: 365,
     aiMonthlyReview: true,
     fullAiInsights: true,
-    csvExport: false,
+    csvExport: true,
+    pdfExport: false,
+    fullHealthScore: true,
+    maxLeaksShown: -1,
+    supplierIntelligence: true,
+    postScanInsight: true,
+    aiChatQueriesPerMonth: 30,
+    aiYearlyReview: false,
   );
 
   static const pro = TierCapabilities(
@@ -39,6 +53,13 @@ class SubscriptionConfig {
     aiMonthlyReview: true,
     fullAiInsights: true,
     csvExport: true,
+    pdfExport: true,
+    fullHealthScore: true,
+    maxLeaksShown: -1,
+    supplierIntelligence: true,
+    postScanInsight: true,
+    aiChatQueriesPerMonth: -1,
+    aiYearlyReview: true,
   );
 
   static TierCapabilities capsFor(SubscriptionTier tier) {

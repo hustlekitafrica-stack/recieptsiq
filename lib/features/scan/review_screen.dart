@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../app/providers.dart';
+import '../../app/subscription_provider.dart';
 import '../../core/money.dart';
 import '../../data/models/category.dart';
 import '../../data/models/line_item.dart';
@@ -98,7 +99,10 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     await ref.read(receiptsProvider.notifier).add(receipt);
     if (!mounted) return;
 
-    final insight = _buildPriceInsight(receipt, existing, _currency);
+    final caps = ref.read(tierCapabilitiesProvider);
+    final insight = caps.postScanInsight
+        ? _buildPriceInsight(receipt, existing, _currency)
+        : null;
     if (insight != null && mounted) {
       await showModalBottomSheet<void>(
         context: context,

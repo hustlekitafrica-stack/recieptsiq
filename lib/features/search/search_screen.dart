@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../app/providers.dart';
-import '../../core/config/env.dart';
+import '../../app/subscription_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/receipt.dart';
+import '../../data/models/subscription_tier.dart';
+import '../paywall/upgrade_gate.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
@@ -95,23 +97,16 @@ class _AiChatTabState extends ConsumerState<_AiChatTab> {
     final receipts = ref.read(receiptsProvider).valueOrNull ?? [];
     final currency = ref.read(displayCurrencyProvider);
 
-    String? reply;
-    if (!Env.hasSupabase) {
-      reply =
-          'AI assistant requires a Supabase connection. Please set up your .env file.';
-    } else {
-      reply = await ref
-          .read(extractionServiceProvider)
-          .askQuestion(
-            message: text.trim(),
-            receipts: receipts,
-            currency: currency,
-          );
-      reply ??= 'I couldn\'t get a response. Please try again.';
-    }
+    final reply = await ref
+        .read(extractionServiceProvider)
+        .askQuestion(
+          message: text.trim(),
+          receipts: receipts,
+          currency: currency,
+        ) ?? 'I couldn\'t process that question. Please try again.';
 
     setState(() {
-      _messages.add(_ChatMessage(text: reply!, isUser: false));
+      _messages.add(_ChatMessage(text: reply, isUser: false));
       _loading = false;
     });
     _scrollToBottom();
@@ -131,6 +126,19 @@ class _AiChatTabState extends ConsumerState<_AiChatTab> {
 
   @override
   Widget build(BuildContext context) {
+    final caps = ref.watch(tierCapabilitiesProvider);
+    if (caps.aiChatQueriesPerMonth == 0) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: UpgradeGate(
+            requiredTier: SubscriptionTier.starter,
+            featureName: 'AI Assistant',
+            child: SizedBox.shrink(),
+          ),
+        ),
+      );
+    }
     return Column(
       children: [
         Expanded(

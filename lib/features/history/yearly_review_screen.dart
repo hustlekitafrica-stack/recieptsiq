@@ -3,10 +3,13 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
+import '../../app/subscription_provider.dart';
 import '../../core/money.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/yearly_review.dart';
+import '../../data/models/subscription_tier.dart';
 import '../../features/dashboard/analytics.dart';
+import '../paywall/upgrade_gate.dart';
 
 class YearlyReviewScreen extends ConsumerWidget {
   final int year;
@@ -14,6 +17,23 @@ class YearlyReviewScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final caps = ref.watch(tierCapabilitiesProvider);
+    if (!caps.aiYearlyReview) {
+      return Scaffold(
+        appBar: AppBar(title: Text('$year Year in Review')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: UpgradeGate(
+              requiredTier: SubscriptionTier.pro,
+              featureName: 'AI Yearly Review',
+              child: SizedBox.shrink(),
+            ),
+          ),
+        ),
+      );
+    }
+
     final reviewAsync = ref.watch(yearlyReviewProvider(year));
     final receiptsAsync = ref.watch(receiptsProvider);
     final currency = ref.watch(displayCurrencyProvider);

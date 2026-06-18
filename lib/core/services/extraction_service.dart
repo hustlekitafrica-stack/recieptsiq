@@ -180,10 +180,139 @@ class ExtractionService {
         },
       );
       final data = res.data as Map?;
-      if (data?['error'] != null) return null;
+      if (data?['error'] != null) {
+        return _localAnswer(message: message, receipts: receipts, currency: currency);
+      }
       return data?['reply'] as String?;
     } catch (_) {
-      return null;
+      return _localAnswer(message: message, receipts: receipts, currency: currency);
     }
+  }
+
+  /// Rule-based fallback when the edge function is unavailable.
+  String _localAnswer({
+    required String message,
+    required List<Receipt> receipts,
+    required String currency,
+  }) {
+    if (receipts.isEmpty) {
+      return 'No receipt data found. Scan some receipts first and I\'ll be able to answer your questions.';
+    }
+
+    final q = message.toLowerCase();
+    final now = DateTime.now();
+
+    // Helpers
+    final thisMonth = receipts
+        .where((r) => r.date.year == now.year && r.date.month == now.month)
+        .toList();
+    final lm = DateTime(now.year, now.month - 1);
+    final lastMonth = receipts
+        .where((r) => r.date.year == lm.year && r.date.month == lm.month)
+        .toList();
+
+    double sum(List<Receipt> list) =>
+        list.fold(0, (s, r) => s + r.total.amount);
+
+    String fmt(double v) => Money(v, currency).format();
+
+    // ── This month total ──────────────────────────────────────────────────
+    if ((q.contains('this month') || q.contains('current month')) &&
+        (q.contains('spend') || q.contains('spent') || q.contains('total'))) {
+      final total = sum(thisMonth);
+      return thisMonth.isEmpty
+          ? 'No receipts recorded yet this month.'
+          : 'You have spent ${fmt(total)} this month across ${thisMonth.length} receipt${thisMonth.length == 1 ? '' : 's'}.';
+    }
+
+    // ── Last month total ──────────────────────────────────────────────────
+    if (q.contains('last month') &&
+        (q.contains('spend') || q.contains('spent') || q.contains('total'))) {
+      final total = sum(lastMonth);
+      return lastMonth.isEmpty
+          ? 'No receipts found for last month.'
+          : 'You spent ${fmt(total)} last month across ${lastMonth.length} receipt${lastMonth.length == 1 ? '' : 's'}.';
+    }
+
+    // ── All-time total ────────────────────────────────────────────────────
+    if ((q.contains('total') || q.contains('all time') || q.contains('ever') || q.contains('overall')) &&
+        (q.contains('spend') || q.contains('spent'))) {
+      final total = sum(receipts);
+      return 'Your total all-time spending is ${fmt(total)} across ${receipts.length} receipts.';
+    }
+
+    // ── Top supplier / merchant ───────────────────────────────────────────
+    if (q.contains('supplier') || q.contains('merchant') ||
+        (q.contains('most') && (q.contains('cost') || q.contains('expensive') || q.contains('spend')))) {
+      final byMerchant = <String, double>{};
+      for (final r in receipts) {
+        byMerchant.update(r.merchant, (v) => v + r.total.amount,
+            ifAbsent: () => r.total.amount);
+      }
+      if (byMerchant.isEmpty) return 'No merchant data available yet.';
+      final top = byMerchant.entries.reduce((a, b) => a.value >= b.value ? a : b);
+      final sorted = byMerchant.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      final topThree = sorted.take(3).map((e) => '${e.key}: ${fmt(e.value)}').join(', ');
+      return 'Your biggest supplier is ${top.key} at ${fmt(top.value)} total. '
+          'Top 3: $topThree.';
+    }
+
+    // ── Category spending ─────────────────────────────────────────────────
+    if (q.contains('categor') || q.contains('what') && q.contains('on') ||
+        q.contains('biggest expense') || q.contains('most spend')) {
+      final byCat = <String, double>{};
+      for (final r in receipts) {
+        byCat.update(r.category.label, (v) => v + r.total.amount,
+            ifAbsent: () => r.total.amount);
+      }
+      if (byCat.isEmpty) return 'No category data available yet.';
+      final top = byCat.entries.reduce((a, b) => a.value >= b.value ? a : b);
+      final total = sum(receipts);
+      final pct = total > 0 ? (top.value / total * 100).toStringAsFixed(0) : '0';
+      return 'Your biggest expense category is ${top.key} at ${fmt(top.value)} ($pct% of total spending).';
+    }
+
+    // ── Trend / comparison ───────────────────────────────────────────────
+    if (q.contains('trend') || q.contains('compar') || q.contains('more') || q.contains('less')) {
+      final thisTotal = sum(thisMonth);
+      final lastTotal = sum(lastMonth);
+      if (lastTotal <= 0) {
+        return 'Not enough monthly history to show a trend yet.';
+      }
+      final diff = thisTotal - lastTotal;
+      final pct = (diff / lastTotal * 100).abs().toStringAsFixed(0);
+      final direction = diff >= 0 ? 'up' : 'down';
+      return 'This month you\'ve spent ${fmt(thisTotal)}, which is $direction $pct% compared to last month\'s ${fmt(lastTotal)}.';
+    }
+
+    // ── Average spend ─────────────────────────────────────────────────────
+    if (q.contains('average') || q.contains('avg')) {
+      final months = receipts.map((r) => '${r.date.year}-${r.date.month}').toSet();
+      if (months.isEmpty) return 'No data to calculate an average.';
+      final avg = sum(receipts) / months.length;
+      return 'Your average monthly spending is ${fmt(avg)} based on ${months.length} month${months.length == 1 ? '' : 's'} of data.';
+    }
+
+    // ── Receipt count ─────────────────────────────────────────────────────
+    if (q.contains('how many') && (q.contains('receipt') || q.contains('scan'))) {
+      return 'You have ${receipts.length} receipt${receipts.length == 1 ? '' : 's'} in total. '
+          '${thisMonth.length} this month.';
+    }
+
+    // ── Generic fallback ─────────────────────────────────────────────────
+    final thisTotal = sum(thisMonth);
+    final byCat = <String, double>{};
+    for (final r in receipts) {
+      byCat.update(r.category.label, (v) => v + r.total.amount,
+          ifAbsent: () => r.total.amount);
+    }
+    final topCat = byCat.isEmpty
+        ? 'N/A'
+        : byCat.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+    return 'You have ${receipts.length} receipts totalling ${fmt(sum(receipts))}. '
+        'This month: ${fmt(thisTotal)} across ${thisMonth.length} receipt${thisMonth.length == 1 ? '' : 's'}. '
+        'Biggest category: $topCat. '
+        'Try asking about spending trends, top suppliers, or category breakdowns.';
   }
 }

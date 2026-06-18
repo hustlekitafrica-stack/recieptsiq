@@ -837,14 +837,15 @@ class _DualHero extends StatelessWidget {
   }
 }
 
-class _HealthScoreCard extends StatelessWidget {
+class _HealthScoreCard extends ConsumerWidget {
   final BusinessHealthScore score;
   final VoidCallback onBudgetTap;
   const _HealthScoreCard(
       {required this.score, required this.onBudgetTap});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final caps = ref.watch(tierCapabilitiesProvider);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -917,34 +918,63 @@ class _HealthScoreCard extends StatelessWidget {
             const SizedBox(height: 12),
             const Divider(height: 1),
             const SizedBox(height: 10),
-            ...score.pillars.map(
-              (p) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  children: [
-                    Icon(
-                      p.good
-                          ? Icons.check_circle_outline
-                          : Icons.warning_amber_outlined,
-                      size: 16,
-                      color: p.good
-                          ? const Color(0xFF22C55E)
-                          : const Color(0xFFF59E0B),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(p.label,
+            if (caps.fullHealthScore)
+              ...score.pillars.map(
+                (p) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      Icon(
+                        p.good
+                            ? Icons.check_circle_outline
+                            : Icons.warning_amber_outlined,
+                        size: 16,
+                        color: p.good
+                            ? const Color(0xFF22C55E)
+                            : const Color(0xFFF59E0B),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(p.label,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13)),
+                      ),
+                      Text(p.description,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13)),
-                    ),
-                    Text(p.description,
-                        style: const TextStyle(
-                            color: Color(0xFF94A3B8), fontSize: 12)),
-                  ],
+                              color: Color(0xFF94A3B8), fontSize: 12)),
+                    ],
+                  ),
+                ),
+              )
+            else
+              GestureDetector(
+                onTap: () => context.push('/paywall'),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.brand.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.lock_outline, size: 15, color: AppTheme.brand),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Upgrade to Starter to see full pillar breakdown',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.brand,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, size: 16, color: AppTheme.brand),
+                    ],
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),

@@ -10,9 +10,12 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 
 import '../../app/providers.dart';
+import '../../app/subscription_provider.dart';
 import '../../core/money.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/receipt.dart';
+import '../../data/models/subscription_tier.dart';
+import '../paywall/upgrade_gate.dart';
 
 class ExportScreen extends ConsumerStatefulWidget {
   const ExportScreen({super.key});
@@ -329,24 +332,41 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
                     style: TextStyle(
                         fontWeight: FontWeight.w700, fontSize: 16)),
                 const SizedBox(height: 12),
-                _ExportButton(
-                  icon: Icons.table_chart_outlined,
-                  title: 'Export as CSV',
-                  subtitle:
-                      'Opens in Excel or Google Sheets',
-                  color: const Color(0xFF22C55E),
-                  loading: _exporting,
-                  onTap: () => _exportCsv(filtered, currency),
-                ),
+                Consumer(builder: (ctx, cRef, _) {
+                  final caps = cRef.watch(tierCapabilitiesProvider);
+                  return caps.csvExport
+                      ? _ExportButton(
+                          icon: Icons.table_chart_outlined,
+                          title: 'Export as CSV',
+                          subtitle: 'Opens in Excel or Google Sheets',
+                          color: const Color(0xFF22C55E),
+                          loading: _exporting,
+                          onTap: () => _exportCsv(filtered, currency),
+                        )
+                      : const UpgradeGate(
+                          requiredTier: SubscriptionTier.starter,
+                          featureName: 'CSV Export',
+                          child: SizedBox.shrink(),
+                        );
+                }),
                 const SizedBox(height: 10),
-                _ExportButton(
-                  icon: Icons.picture_as_pdf_outlined,
-                  title: 'Export as PDF',
-                  subtitle: 'Formatted business expense report',
-                  color: const Color(0xFFEF4444),
-                  loading: _exporting,
-                  onTap: () => _exportPdf(filtered, currency),
-                ),
+                Consumer(builder: (ctx, cRef, _) {
+                  final caps = cRef.watch(tierCapabilitiesProvider);
+                  return caps.pdfExport
+                      ? _ExportButton(
+                          icon: Icons.picture_as_pdf_outlined,
+                          title: 'Export as PDF',
+                          subtitle: 'Formatted business expense report',
+                          color: const Color(0xFFEF4444),
+                          loading: _exporting,
+                          onTap: () => _exportPdf(filtered, currency),
+                        )
+                      : const UpgradeGate(
+                          requiredTier: SubscriptionTier.pro,
+                          featureName: 'PDF Export',
+                          child: SizedBox.shrink(),
+                        );
+                }),
               ],
             ],
           );

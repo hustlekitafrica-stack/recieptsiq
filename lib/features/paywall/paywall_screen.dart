@@ -423,12 +423,16 @@ class _FeatureTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = [
-      _FeatureRow('Receipt scans / month', '5', '50', 'Unlimited'),
-      _FeatureRow('Analytics history', '30 days', '6 months', 'All time'),
-      _FeatureRow('Receipt history', '30 days', '6 months', 'All time'),
+      _FeatureRow('Receipt scans / month', '10', '50', 'Unlimited'),
+      _FeatureRow('History', '90 days', '12 months', 'All time'),
+      _FeatureRow('Business Health Score', 'Score only', 'Full', 'Full'),
       _FeatureRow('AI Monthly Review', null, '✓', '✓'),
-      _FeatureRow('Full AI Insights', null, '✓', '✓'),
-      _FeatureRow('CSV Export', null, null, '✓'),
+      _FeatureRow('AI Assistant (Ask AI)', null, '30 / month', 'Unlimited'),
+      _FeatureRow('Supplier Intelligence', null, '✓', '✓'),
+      _FeatureRow('Money Leak Detector', '1 leak', 'All leaks', 'All leaks'),
+      _FeatureRow('CSV Export', null, '✓', '✓'),
+      _FeatureRow('PDF Export', null, null, '✓'),
+      _FeatureRow('AI Yearly Review', null, null, '✓'),
       _FeatureRow('Support', 'Community', 'Email', 'Priority'),
     ];
 

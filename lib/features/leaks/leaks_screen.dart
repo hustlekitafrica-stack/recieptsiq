@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:go_router/go_router.dart';
+
 import '../../app/providers.dart';
+import '../../app/subscription_provider.dart';
 import '../../core/money.dart';
 import '../../core/theme/app_theme.dart';
 import 'money_leak_detector.dart';
@@ -30,6 +33,12 @@ class LeaksScreen extends ConsumerWidget {
           final totalSaving =
               leaks.fold<double>(0, (s, l) => s + l.savingAmount);
 
+          final caps = ref.read(tierCapabilitiesProvider);
+          final maxShown = caps.isUnlimitedLeaks
+              ? leaks.length
+              : caps.maxLeaksShown.clamp(0, leaks.length);
+          final locked = leaks.length - maxShown;
+
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
             children: [
@@ -38,7 +47,10 @@ class LeaksScreen extends ConsumerWidget {
               const SizedBox(height: 16),
               const _SectionLabel('Detected leaks this month'),
               const SizedBox(height: 8),
-              ...leaks.map((l) => _LeakCard(leak: l, currency: currency)),
+              ...leaks
+                  .take(maxShown)
+                  .map((l) => _LeakCard(leak: l, currency: currency)),
+              if (locked > 0) _LeakUpgradeTeaser(lockedCount: locked),
               const SizedBox(height: 16),
               _HowItWorksCard(),
             ],
@@ -259,6 +271,54 @@ class _HowItWorksCard extends StatelessWidget {
                   fontSize: 12,
                   color: Color(0xFF94A3B8),
                   height: 1.5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LeakUpgradeTeaser extends StatelessWidget {
+  final int lockedCount;
+  const _LeakUpgradeTeaser({required this.lockedCount});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.brand.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.lock_outline, color: AppTheme.brand, size: 26),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '$lockedCount more leak${lockedCount > 1 ? 's' : ''} detected',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Upgrade to Starter to see all leaks and unlock your full savings potential.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+            ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: () => context.push('/paywall'),
+              icon: const Icon(Icons.rocket_launch_outlined, size: 18),
+              label: const Text('Upgrade to Starter'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 44),
+              ),
             ),
           ],
         ),
