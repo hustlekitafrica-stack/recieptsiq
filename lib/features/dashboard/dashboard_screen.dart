@@ -6,16 +6,18 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/providers.dart';
 import '../../app/subscription_provider.dart';
-import '../../core/config/env.dart';
 import '../../data/repositories/receipt_repository.dart';
 import '../../core/money.dart';
 import '../../core/theme/app_theme.dart';
-import '../../data/models/category.dart';
 import '../../data/models/monthly_review.dart';
 import '../../data/models/receipt.dart';
 import '../../data/models/subscription_tier.dart';
+import '../../features/budgets/budget_model.dart';
+import '../../features/budgets/budget_provider.dart';
+import '../../features/leaks/money_leak_detector.dart';
 import '../../features/paywall/upgrade_gate.dart';
 import 'analytics.dart';
+import 'health_score.dart';
 import 'insights.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -24,7 +26,6 @@ class DashboardScreen extends ConsumerWidget {
   static void _showAccountSheet(BuildContext context, WidgetRef ref) {
     final user = Supabase.instance.client.auth.currentUser;
     final isAnon = user == null || user.isAnonymous;
-    final devProMode = !Env.hasRevenueCat;
     final display = user?.email ?? user?.phone ?? 'Guest account';
 
     showModalBottomSheet(
@@ -32,7 +33,10 @@ class DashboardScreen extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (ctx) => SafeArea(
+      builder: (ctx) => Consumer(
+        builder: (ctx, sheetRef, _) {
+          final subAsync = sheetRef.watch(userSubscriptionRecordProvider);
+          return SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
           child: Column(
@@ -56,21 +60,6 @@ class DashboardScreen extends ConsumerWidget {
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
               ),
-              if (devProMode) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppTheme.brand.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppTheme.brand.withValues(alpha: 0.3)),
-                  ),
-                  child: const Text(
-                    '✓ Pro — all features unlocked (pre-launch mode)',
-                    style: TextStyle(color: AppTheme.brand, fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
               if (isAnon) ...[
                 const SizedBox(height: 16),
                 SizedBox(
@@ -84,7 +73,7 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
               ],
-              if (!devProMode) ...[
+              if (!isAnon) ...[
                 const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
@@ -96,6 +85,65 @@ class DashboardScreen extends ConsumerWidget {
                     icon: const Icon(Icons.rocket_launch_outlined, size: 16),
                     label: const Text('View plans'),
                   ),
+                ),
+                subAsync.when(
+                  data: (sub) {
+                    if (sub == null) return const SizedBox.shrink();
+                    final isPesapal = sub['payment_provider'] == 'pesapal';
+                    final autoRenew = sub['auto_renew'] == true;
+                    if (!isPesapal || !autoRenew) return const SizedBox.shrink();
+                    final period = (sub['billing_period'] ?? 'monthly') as String;
+                    final expiresAt = sub['expires_at'] != null
+                        ? DateTime.tryParse(sub['expires_at'] as String)
+                        : null;
+                    final expiresStr = expiresAt != null
+                        ? DateFormat('MMM d, yyyy').format(expiresAt.toLocal())
+                        : null;
+                    return Column(
+                      children: [
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0FDF4),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF86EFAC)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.autorenew, size: 15, color: Color(0xFF16A34A)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Pesapal · ${period[0].toUpperCase()}${period.substring(1)}'
+                                  '${expiresStr != null ? ' · renews $expiresStr' : ''}',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF15803D),
+                                      fontWeight: FontWeight.w500),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _cancelSubscription(ctx, sheetRef),
+                            icon: const Icon(Icons.cancel_outlined, size: 16),
+                            label: const Text('Cancel subscription'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFFDC2626),
+                              side: const BorderSide(color: Color(0xFFDC2626)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
                 ),
               ],
               const SizedBox(height: 8),
@@ -150,24 +198,72 @@ class DashboardScreen extends ConsumerWidget {
             ],
           ),
         ),
+      );
+        },
       ),
     );
   }
 
+  static Future<void> _cancelSubscription(
+      BuildContext ctx, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: ctx,
+      builder: (d) => AlertDialog(
+        title: const Text('Cancel subscription?'),
+        content: const Text(
+            'Your subscription stays active until the end of the current billing period.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(d, false),
+            child: const Text('Keep subscription'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(d, true),
+            style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626)),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !ctx.mounted) return;
+    try {
+      await Supabase.instance.client.functions
+          .invoke('payments-pesapal-cancel');
+      ref.invalidate(userSubscriptionRecordProvider);
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'Subscription cancelled — access continues until expiry.')),
+        );
+        Navigator.pop(ctx);
+      }
+    } catch (e) {
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(content: Text('Failed to cancel: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final user = Supabase.instance.client.auth.currentUser;
     final currency = ref.watch(displayCurrencyProvider);
     final receiptsAsync = ref.watch(receiptsProvider);
     final selectedMonth = ref.watch(selectedDashboardMonthProvider);
     final reviewAsync = ref.watch(monthlyReviewProvider(selectedMonth));
     final caps = ref.watch(tierCapabilitiesProvider);
+    final budgetAsync = ref.watch(budgetProvider);
     final now = DateTime.now();
     final isCurrentMonth =
         selectedMonth.year == now.year && selectedMonth.month == now.month;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ReceiptIQ'),
+        title: _GreetingTitle(user: user),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -184,6 +280,15 @@ class DashboardScreen extends ConsumerWidget {
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (receipts) {
           final a = SpendingAnalytics.compute(receipts, now: selectedMonth);
+          final budget = budgetAsync.valueOrNull;
+          final healthScore = BusinessHealthScore.compute(
+            receipts,
+            monthlyBudget: budget?.amount,
+          );
+          final leaks = isCurrentMonth
+              ? MoneyLeakDetector.detect(receipts, currency)
+              : <MoneyLeak>[];
+
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
             children: [
@@ -202,7 +307,17 @@ class DashboardScreen extends ConsumerWidget {
                             selectedMonth.year, selectedMonth.month + 1),
               ),
               const SizedBox(height: 8),
-              _MonthlyHero(amount: a.monthlySpend, currency: currency, trend: a.trendPercent),
+              _DualHero(analytics: a, currency: currency),
+              const SizedBox(height: 12),
+              _HealthScoreCard(
+                score: healthScore,
+                onBudgetTap: () => context.push('/budget'),
+              ),
+              if (budget != null && isCurrentMonth) ...[
+                const SizedBox(height: 12),
+                _BudgetCard(
+                    budget: budget, spent: a.monthlySpend, currency: currency),
+              ],
               const SizedBox(height: 16),
               caps.aiMonthlyReview
                   ? _AiReviewCard(reviewAsync: reviewAsync)
@@ -220,11 +335,27 @@ class DashboardScreen extends ConsumerWidget {
                 _CategoryBreakdown(analytics: a, currency: currency),
                 const SizedBox(height: 16),
               ],
-              _SectionTitle('Financial coach'),
-              const SizedBox(height: 8),
-              ...generateInsights(receipts, currency)
-                  .map((i) => _InsightCard(insight: i)),
-              const SizedBox(height: 16),
+              if (leaks.isNotEmpty) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _SectionTitle('Money leaks'),
+                    TextButton(
+                      onPressed: () => context.push('/leaks'),
+                      child: const Text('See all'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ...leaks.take(2).map((l) => _LeakPreviewCard(leak: l)),
+                const SizedBox(height: 16),
+              ] else ...[
+                _SectionTitle('Financial coach'),
+                const SizedBox(height: 8),
+                ...generateInsights(receipts, currency)
+                    .map((i) => _InsightCard(insight: i)),
+                const SizedBox(height: 16),
+              ],
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -313,58 +444,6 @@ class _SectionTitle extends StatelessWidget {
       );
 }
 
-class _MonthlyHero extends StatelessWidget {
-  final double amount;
-  final String currency;
-  final double? trend;
-  const _MonthlyHero(
-      {required this.amount, required this.currency, this.trend});
-
-  @override
-  Widget build(BuildContext context) {
-    final up = (trend ?? 0) >= 0;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppTheme.brand, AppTheme.brandDark],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('This month',
-              style: TextStyle(color: Colors.white70, fontSize: 14)),
-          const SizedBox(height: 6),
-          Text(
-            Money(amount, currency).format(),
-            style: const TextStyle(
-                color: Colors.white,
-                fontSize: 34,
-                fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 10),
-          if (trend != null)
-            Row(
-              children: [
-                Icon(up ? Icons.trending_up : Icons.trending_down,
-                    color: Colors.white, size: 18),
-                const SizedBox(width: 6),
-                Text(
-                  '${up ? 'Up' : 'Down'} ${trend!.abs().toStringAsFixed(0)}% vs last month',
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                ),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-}
 
 class _StatRow extends StatelessWidget {
   final SpendingAnalytics analytics;
@@ -626,6 +705,404 @@ class _AiReviewCard extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ── New dashboard widgets ─────────────────────────────────────────────────────
+
+class _GreetingTitle extends StatelessWidget {
+  final User? user;
+  const _GreetingTitle({required this.user});
+
+  String _name() {
+    if (user == null || user!.isAnonymous) return 'there';
+    final meta = user!.userMetadata;
+    if (meta?['full_name'] != null) {
+      return (meta!['full_name'] as String).split(' ').first;
+    }
+    final email = user!.email;
+    if (email != null && email.contains('@')) return email.split('@').first;
+    final phone = user!.phone;
+    if (phone != null && phone.length >= 6) {
+      return '${phone.substring(0, 4)}…';
+    }
+    return 'there';
+  }
+
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      '${_greeting()}, ${_name()}',
+      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+    );
+  }
+}
+
+class _DualHero extends StatelessWidget {
+  final SpendingAnalytics analytics;
+  final String currency;
+  const _DualHero({required this.analytics, required this.currency});
+
+  @override
+  Widget build(BuildContext context) {
+    final savings = (analytics.lastMonthSpend - analytics.monthlySpend)
+        .clamp(0.0, double.infinity);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppTheme.brand, AppTheme.brandDark],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('This month',
+                    style: TextStyle(color: Colors.white70, fontSize: 13)),
+                const SizedBox(height: 4),
+                Text(
+                  Money(analytics.monthlySpend, currency).format(),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800),
+                ),
+                if (analytics.trendPercent != null) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        (analytics.trendPercent ?? 0) >= 0
+                            ? Icons.trending_up
+                            : Icons.trending_down,
+                        color: Colors.white70,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${(analytics.trendPercent ?? 0) >= 0 ? '+' : ''}${analytics.trendPercent!.toStringAsFixed(0)}% vs last month',
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Container(width: 1, height: 60, color: Colors.white24),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('You saved',
+                    style: TextStyle(color: Colors.white70, fontSize: 13)),
+                const SizedBox(height: 4),
+                Text(
+                  Money(savings, currency).format(),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  savings > 0 ? 'vs last month' : 'Keep it up!',
+                  style: const TextStyle(
+                      color: Colors.white70, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HealthScoreCard extends StatelessWidget {
+  final BusinessHealthScore score;
+  final VoidCallback onBudgetTap;
+  const _HealthScoreCard(
+      {required this.score, required this.onBudgetTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Business Health',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 14)),
+                    const SizedBox(height: 4),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${score.score}',
+                          style: TextStyle(
+                              fontSize: 40,
+                              fontWeight: FontWeight.w900,
+                              color: score.gradeColor),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 7),
+                          child: Text('/100',
+                              style: TextStyle(
+                                  fontSize: 15, color: Color(0xFF94A3B8))),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: score.gradeColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        score.grade,
+                        style: TextStyle(
+                            color: score.gradeColor,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: onBudgetTap,
+                      child: const Text(
+                        'Set budget →',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.brand,
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 10),
+            ...score.pillars.map(
+              (p) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      p.good
+                          ? Icons.check_circle_outline
+                          : Icons.warning_amber_outlined,
+                      size: 16,
+                      color: p.good
+                          ? const Color(0xFF22C55E)
+                          : const Color(0xFFF59E0B),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(p.label,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13)),
+                    ),
+                    Text(p.description,
+                        style: const TextStyle(
+                            color: Color(0xFF94A3B8), fontSize: 12)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BudgetCard extends StatelessWidget {
+  final Budget budget;
+  final double spent;
+  final String currency;
+  const _BudgetCard({
+    required this.budget,
+    required this.spent,
+    required this.currency,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = (spent / budget.amount).clamp(0.0, 1.5);
+    final pctDisplay = (pct * 100).toStringAsFixed(0);
+    final remaining = budget.amount - spent;
+    final isOver = spent > budget.amount;
+    final color = pct >= 1.0
+        ? const Color(0xFFEF4444)
+        : pct >= 0.75
+            ? const Color(0xFFF59E0B)
+            : const Color(0xFF22C55E);
+    final now = DateTime.now();
+    final daysInMonth =
+        DateTime(now.year, now.month + 1, 0).day;
+    final daysLeft = daysInMonth - now.day;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.savings_outlined, color: color, size: 18),
+                const SizedBox(width: 8),
+                const Text('Monthly Budget',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 14)),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => context.push('/budget'),
+                  child: const Text('Edit',
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.brand,
+                          fontWeight: FontWeight.w500)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(Money(spent, currency).format(),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 15)),
+                Text('of ${Money(budget.amount, currency).format()}',
+                    style: const TextStyle(
+                        color: Color(0xFF94A3B8), fontSize: 13)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: pct.clamp(0.0, 1.0),
+                minHeight: 10,
+                backgroundColor: const Color(0xFFEFF1F5),
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '$pctDisplay% used',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: color),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isOver
+                        ? 'Over by ${Money(spent - budget.amount, currency).format()}'
+                        : '${Money(remaining, currency).format()} left · $daysLeft days remaining',
+                    style: const TextStyle(
+                        color: Color(0xFF64748B), fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LeakPreviewCard extends StatelessWidget {
+  final MoneyLeak leak;
+  const _LeakPreviewCard({required this.leak});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: leak.color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: leak.color.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(leak.icon, color: leak.color, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(leak.title,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13)),
+                const SizedBox(height: 3),
+                Text(
+                  leak.detail,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF64748B),
+                      height: 1.3),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

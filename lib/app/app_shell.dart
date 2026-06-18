@@ -64,9 +64,9 @@ class AppShell extends StatelessWidget {
               onTap: () => context.go('/analytics'),
             ),
             _NavItem(
-              icon: Icons.search_outlined,
-              activeIcon: Icons.search,
-              label: 'Search',
+              icon: Icons.smart_toy_outlined,
+              activeIcon: Icons.smart_toy,
+              label: 'Assistant',
               selected: index == 3,
               onTap: () => context.go('/search'),
             ),

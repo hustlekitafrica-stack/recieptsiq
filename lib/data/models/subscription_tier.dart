@@ -1,5 +1,13 @@
 enum SubscriptionTier { free, starter, pro }
 
+enum BillingPeriod { monthly, yearly }
+
+class PaymentArgs {
+  final SubscriptionTier tier;
+  final BillingPeriod billingPeriod;
+  const PaymentArgs({required this.tier, required this.billingPeriod});
+}
+
 class TierCapabilities {
   final SubscriptionTier tier;
   final int maxScansPerMonth;

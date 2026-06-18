@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/providers.dart';
 import '../../app/subscription_provider.dart';
@@ -25,24 +26,95 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
 
   // ── Scan limit gate ───────────────────────────────────────────────────────
   bool _checkScanLimit() {
+    // If SharedPreferences are still loading, silently block — don't show the
+    // sheet yet because we don't know the real count.
+    if (ref.read(usageServiceProvider) == null) return false;
     final canScan = ref.read(canScanProvider);
     if (!canScan) {
-      final caps = ref.read(tierCapabilitiesProvider);
-      final used = ref.read(scansThisMonthProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Scan limit reached ($used / ${caps.maxScansPerMonth} this month). Upgrade to scan more.',
-          ),
-          action: SnackBarAction(
-            label: 'Upgrade',
-            onPressed: () => context.push('/paywall'),
-          ),
-        ),
-      );
+      _showLimitReachedSheet();
       return false;
     }
     return true;
+  }
+
+  void _showLimitReachedSheet() {
+    final user = Supabase.instance.client.auth.currentUser;
+    final isAnon = user == null || user.isAnonymous;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: AppTheme.brand.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.document_scanner_outlined,
+                    color: AppTheme.brand, size: 32),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Free scans used up',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                isAnon
+                    ? "You've used all 5 free scans. Sign in to purchase "
+                        'more credits and keep tracking your spending.'
+                    : "You've used all 5 free scans this month. "
+                        'Upgrade your plan to scan more receipts.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: Color(0xFF64748B), fontSize: 14, height: 1.4),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    if (isAnon) {
+                      context.push('/auth');
+                    } else {
+                      context.push('/paywall');
+                    }
+                  },
+                  icon: Icon(
+                    isAnon
+                        ? Icons.login_outlined
+                        : Icons.rocket_launch_outlined,
+                    size: 18,
+                  ),
+                  label: Text(isAnon ? 'Sign in to continue' : 'View plans'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Maybe later'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // ── Native camera capture ─────────────────────────────────────────────────
@@ -153,9 +225,85 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     );
   }
 
+  Widget _buildLimitReachedBody(bool isAnon) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppTheme.brand.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.document_scanner_outlined,
+                    color: AppTheme.brand, size: 40),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Free scans used up',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              isAnon
+                  ? "You've used all 5 free scans. Sign in to purchase "
+                      'more credits and keep tracking your spending.'
+                  : "You've used all 5 free scans this month. "
+                      'Upgrade your plan to scan more receipts.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: Color(0xFF64748B), fontSize: 15, height: 1.5),
+            ),
+            const Spacer(),
+            FilledButton.icon(
+              onPressed: () {
+                if (isAnon) {
+                  context.push('/auth');
+                } else {
+                  context.push('/paywall');
+                }
+              },
+              icon: Icon(
+                isAnon
+                    ? Icons.login_outlined
+                    : Icons.rocket_launch_outlined,
+                size: 18,
+              ),
+              label: Text(isAnon ? 'Sign in to continue' : 'View plans'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: () => context.pop(),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+              ),
+              child: const Text('Go back'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    final usageLoaded = ref.watch(usageServiceProvider) != null;
+    final canScan = ref.watch(canScanProvider);
+    final isBlocked = usageLoaded && !canScan;
+    final user = Supabase.instance.client.auth.currentUser;
+    final isAnon = user == null || user.isAnonymous;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Scan receipt')),
@@ -170,7 +318,9 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                 ],
               ),
             )
-          : SafeArea(
+          : isBlocked
+              ? _buildLimitReachedBody(isAnon)
+              : SafeArea(
               child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
               child: Column(

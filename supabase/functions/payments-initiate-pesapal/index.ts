@@ -13,9 +13,17 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-const PRICES: Record<string, { amount: number; currency: string }> = {
-  starter: { amount: 250, currency: 'KES' },
-  pro: { amount: 1000, currency: 'KES' },
+type PriceEntry = { amount: number; currency: string };
+
+const PRICES: Record<string, { monthly: PriceEntry; yearly: PriceEntry }> = {
+  starter: {
+    monthly: { amount: 250,   currency: 'KES' },
+    yearly:  { amount: 2500,  currency: 'KES' },
+  },
+  pro: {
+    monthly: { amount: 1000,  currency: 'KES' },
+    yearly:  { amount: 10000, currency: 'KES' },
+  },
 };
 
 async function getPesapalToken(): Promise<string> {
@@ -27,6 +35,7 @@ async function getPesapalToken(): Promise<string> {
   const data = await resp.json();
   return data.token;
 }
+
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -41,8 +50,11 @@ serve(async (req) => {
       });
     }
 
-    const { tier } = await req.json();
-    const price = PRICES[tier] ?? PRICES['starter'];
+    const { tier, billing_period = 'monthly' } = await req.json();
+    const tierPrices = PRICES[tier] ?? PRICES['starter'];
+    const price = billing_period === 'yearly' ? tierPrices.yearly : tierPrices.monthly;
+    const frequency = billing_period === 'yearly' ? 'ANNUAL' : 'MONTHLY';
+
     const token = await getPesapalToken();
     const orderRef = `receiptiq-${user.id.slice(0, 8)}-${Date.now()}`;
 
@@ -57,10 +69,21 @@ serve(async (req) => {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
-        id: orderRef, currency: price.currency, amount: price.amount,
-        description: `ReceiptIQ ${tier} subscription`,
-        callback_url: PESAPAL_CALLBACK_URL, notification_id: ipnData.ipn_id,
+        id: orderRef,
+        currency: price.currency,
+        amount: price.amount,
+        description: `ReceiptIQ ${tier} subscription (${billing_period})`,
+        callback_url: PESAPAL_CALLBACK_URL,
+        notification_id: ipnData.ipn_id,
         billing_address: { email_address: user.email ?? `${user.id}@receiptiq.app` },
+        // subscription_details requires Pesapal recurring billing to be enabled
+        // on the merchant account. Contact Pesapal support to activate, then
+        // uncomment the block below:
+        // subscription_details: {
+        //   start_date: isoDate(startDate),
+        //   end_date:   isoDate(endDate),
+        //   frequency,
+        // },
       }),
     });
     const orderData = await orderResp.json();
@@ -74,7 +97,11 @@ serve(async (req) => {
     await supabase.from('payment_transactions').insert({
       user_id: user.id, amount: price.amount, currency: price.currency,
       provider: 'pesapal', status: 'pending', tier, provider_ref: orderRef,
-      metadata: { order_tracking_id: orderData.order_tracking_id },
+      metadata: {
+        order_tracking_id: orderData.order_tracking_id,
+        billing_period,
+        frequency,
+      },
     });
 
     return new Response(JSON.stringify({ checkoutUrl: orderData.redirect_url }), {

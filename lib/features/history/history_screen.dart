@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../app/providers.dart';
 import '../../core/money.dart';
 import '../../core/theme/app_theme.dart';
-import '../../data/models/category.dart';
 import '../../data/models/receipt.dart';
 
 class HistoryScreen extends ConsumerStatefulWidget {
@@ -23,7 +22,6 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   Widget build(BuildContext context) {
     final receiptsAsync = ref.watch(receiptsProvider);
     final currency = ref.watch(displayCurrencyProvider);
-    final now = DateTime.now();
 
     return Scaffold(
       appBar: AppBar(title: const Text('History')),

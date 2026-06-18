@@ -7,16 +7,17 @@ import '../../core/config/subscription_config.dart';
 import '../../core/services/payment_routing_service.dart';
 import '../../data/models/subscription_tier.dart';
 
-/// Bottom sheet that lists available payment methods for the selected [tier]
+/// Bottom sheet that lists available payment methods for the selected [args]
 /// and routes to the appropriate checkout flow.
 class PaymentMethodSelector extends ConsumerWidget {
-  final SubscriptionTier tier;
-  const PaymentMethodSelector({super.key, required this.tier});
+  final PaymentArgs args;
+  const PaymentMethodSelector({super.key, required this.args});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final caps = SubscriptionConfig.capsFor(tier);
+    final caps = SubscriptionConfig.capsFor(args.tier);
     final methods = PaymentRoutingService.methodsForCurrentLocale();
+    final mq = MediaQuery.of(context);
 
     return Container(
       decoration: const BoxDecoration(
@@ -24,7 +25,7 @@ class PaymentMethodSelector extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(
-          20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 32),
+          20, 16, 20, mq.viewInsets.bottom + mq.padding.bottom + 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -45,14 +46,14 @@ class PaymentMethodSelector extends ConsumerWidget {
             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
           ),
           const SizedBox(height: 4),
-          const Text(
-            'Choose your preferred payment method',
-            style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+          Text(
+            '${args.billingPeriod == BillingPeriod.yearly ? "Yearly" : "Monthly"} subscription — choose a payment method',
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
           ),
           const SizedBox(height: 20),
           ...methods.map((m) => _MethodTile(
                 method: m,
-                tier: tier,
+                args: args,
                 onSelected: (result) => Navigator.of(context).pop(result),
               )),
         ],
@@ -63,12 +64,12 @@ class PaymentMethodSelector extends ConsumerWidget {
 
 class _MethodTile extends ConsumerWidget {
   final PaymentMethod method;
-  final SubscriptionTier tier;
+  final PaymentArgs args;
   final ValueChanged<SubscriptionTier> onSelected;
 
   const _MethodTile({
     required this.method,
-    required this.tier,
+    required this.args,
     required this.onSelected,
   });
 
@@ -104,14 +105,14 @@ class _MethodTile extends ConsumerWidget {
       case PaymentMethodType.mpesa:
         final result = await context.push<SubscriptionTier>(
           '/paywall/mpesa',
-          extra: tier,
+          extra: args,
         );
         if (result != null) onSelected(result);
         break;
       case PaymentMethodType.pesapal:
         final result = await context.push<SubscriptionTier>(
           '/paywall/pesapal',
-          extra: tier,
+          extra: args,
         );
         if (result != null) onSelected(result);
         break;
@@ -121,9 +122,11 @@ class _MethodTile extends ConsumerWidget {
   Future<void> _handlePlayStore(BuildContext context, WidgetRef ref) async {
     try {
       final service = ref.read(subscriptionServiceProvider);
-      final productId = tier == SubscriptionTier.pro
-          ? SubscriptionConfig.rcProMonthly
-          : SubscriptionConfig.rcStarterMonthly;
+      final isYearly = args.billingPeriod == BillingPeriod.yearly;
+      final isPro = args.tier == SubscriptionTier.pro;
+      final productId = isYearly
+          ? (isPro ? SubscriptionConfig.rcProYearly : SubscriptionConfig.rcStarterYearly)
+          : (isPro ? SubscriptionConfig.rcProMonthly : SubscriptionConfig.rcStarterMonthly);
       final result = await service.purchase(productId);
       onSelected(result);
     } catch (e) {

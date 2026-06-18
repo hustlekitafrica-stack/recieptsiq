@@ -26,7 +26,7 @@ class SubscriptionService {
   /// Returns the user's current active tier by inspecting RevenueCat
   /// entitlements. Falls back to [SubscriptionTier.free] on any error.
   Future<SubscriptionTier> currentTier() async {
-    if (!Env.hasRevenueCat) return SubscriptionTier.pro; // pre-launch: all features unlocked
+    if (!Env.hasRevenueCat) return SubscriptionTier.free;
     if (!_configured) return SubscriptionTier.free;
     try {
       final info = await Purchases.getCustomerInfo();
@@ -49,7 +49,7 @@ class SubscriptionService {
 
   /// Restores previous purchases (for users who reinstall).
   Future<SubscriptionTier> restore() async {
-    if (!Env.hasRevenueCat) return SubscriptionTier.pro;
+    if (!Env.hasRevenueCat) return SubscriptionTier.free;
     final info = await Purchases.restorePurchases();
     return _tierFromInfo(info);
   }

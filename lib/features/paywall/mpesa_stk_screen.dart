@@ -20,7 +20,8 @@ import '../../data/models/subscription_tier.dart';
 ///    timed out.
 class MpesaStkScreen extends ConsumerStatefulWidget {
   final SubscriptionTier tier;
-  const MpesaStkScreen({super.key, required this.tier});
+  final BillingPeriod billingPeriod;
+  const MpesaStkScreen({super.key, required this.tier, required this.billingPeriod});
 
   @override
   ConsumerState<MpesaStkScreen> createState() => _MpesaStkScreenState();
@@ -46,8 +47,14 @@ class _MpesaStkScreenState extends ConsumerState<MpesaStkScreen> {
   String get _tierLabel =>
       widget.tier == SubscriptionTier.pro ? 'Pro' : 'Starter';
 
-  String get _amount =>
-      widget.tier == SubscriptionTier.pro ? '1000' : '250';
+  String get _amount {
+    final isYearly = widget.billingPeriod == BillingPeriod.yearly;
+    if (isYearly) return widget.tier == SubscriptionTier.pro ? '10000' : '2500';
+    return widget.tier == SubscriptionTier.pro ? '1000' : '250';
+  }
+
+  String get _billingLabel =>
+      widget.billingPeriod == BillingPeriod.yearly ? 'Yearly' : 'Monthly';
 
   Future<void> _initiateStk() async {
     if (!_formKey.currentState!.validate()) return;
@@ -124,9 +131,11 @@ class _MpesaStkScreenState extends ConsumerState<MpesaStkScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Pay via M-Pesa')),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: _buildBody(),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: _buildBody(),
+        ),
       ),
     );
   }
@@ -183,7 +192,7 @@ class _MpesaStkScreenState extends ConsumerState<MpesaStkScreen> {
                 const Icon(Icons.phone_android_outlined,
                     color: Color(0xFF4CAF50), size: 40),
                 const SizedBox(height: 10),
-                Text('Pay KES $_amount for $_tierLabel',
+                Text('Pay KES $_amount for $_tierLabel ($_billingLabel)',
                     style: const TextStyle(
                         fontWeight: FontWeight.w800, fontSize: 18)),
                 const SizedBox(height: 4),

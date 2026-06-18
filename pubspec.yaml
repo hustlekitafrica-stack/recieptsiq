@@ -69,6 +69,12 @@ dependencies:
   # Local prefs
   shared_preferences: ^2.3.2
 
+  # Export (CSV + PDF)
+  csv: ^6.0.0
+  pdf: ^3.11.1
+  path_provider: ^2.1.4
+  share_plus: ^10.0.0
+
   # In-app subscriptions (RevenueCat)
   purchases_flutter: ^8.7.0
 

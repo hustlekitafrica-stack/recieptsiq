@@ -94,12 +94,60 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
       createdAt: DateTime.now(),
     );
 
+    final existing = ref.read(receiptsProvider).valueOrNull ?? [];
     await ref.read(receiptsProvider.notifier).add(receipt);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Receipt saved')),
-    );
-    context.go('/receipts');
+
+    final insight = _buildPriceInsight(receipt, existing, _currency);
+    if (insight != null && mounted) {
+      await showModalBottomSheet<void>(
+        context: context,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (_) => _PostScanInsightSheet(
+          receipt: receipt,
+          insight: insight,
+        ),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Receipt saved')),
+      );
+    }
+    if (mounted) context.go('/receipts');
+  }
+
+  static String? _buildPriceInsight(
+      Receipt newReceipt, List<Receipt> existing, String currency) {
+    final prev = existing
+        .where((r) =>
+            r.merchant.toLowerCase() ==
+                newReceipt.merchant.toLowerCase() &&
+            r.id != newReceipt.id)
+        .toList();
+
+    if (prev.length < 3) return null;
+
+    final avgTotal =
+        prev.fold<double>(0, (s, r) => s + r.total.amount) / prev.length;
+    final currentTotal = newReceipt.total.amount;
+
+    if (avgTotal <= 0) return null;
+
+    final diff = currentTotal - avgTotal;
+    final pct = (diff / avgTotal) * 100;
+
+    if (pct >= 10) {
+      return 'You normally spend ${Money(avgTotal, currency).format()} at '
+          '${newReceipt.merchant}. This receipt is ${Money(diff.abs(), currency).format()} '
+          'above your usual amount.';
+    }
+    if (pct <= -10) {
+      return 'Great deal! This is ${Money(diff.abs(), currency).format()} '
+          'below your usual spend at ${newReceipt.merchant}.';
+    }
+    return null;
   }
 
   Future<void> _pickItemCategory(int index) async {
@@ -338,4 +386,88 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
             style: const TextStyle(
                 fontWeight: FontWeight.w600, color: Color(0xFF475569))),
       );
+}
+
+class _PostScanInsightSheet extends StatelessWidget {
+  final Receipt receipt;
+  final String insight;
+  const _PostScanInsightSheet(
+      {required this.receipt, required this.insight});
+
+  @override
+  Widget build(BuildContext context) {
+    final isAbove = insight.contains('above your usual');
+    final color =
+        isAbove ? const Color(0xFFF59E0B) : const Color(0xFF22C55E);
+    final icon = isAbove
+        ? Icons.trending_up_rounded
+        : Icons.thumb_up_outlined;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 30),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Receipt saved ✓',
+              style: const TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              receipt.merchant,
+              style: const TextStyle(
+                  color: Color(0xFF64748B), fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                    color: color.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.lightbulb_outline,
+                      color: color, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      insight,
+                      style: TextStyle(
+                          fontSize: 14,
+                          color: color,
+                          fontWeight: FontWeight.w600,
+                          height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Got it'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

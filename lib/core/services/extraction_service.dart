@@ -1,9 +1,10 @@
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/env.dart';
 import '../money.dart';
-import '../../data/models/category.dart';
 import '../../data/models/monthly_review.dart';
+import '../../data/models/receipt.dart';
 import '../../data/models/receipt_draft.dart';
 import '../../data/models/yearly_review.dart';
 import '../../features/dashboard/analytics.dart';
@@ -145,6 +146,42 @@ class ExtractionService {
         summary: review.summary,
         savingsOpportunities: [...review.insights, ...review.tips],
       );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ── AI Chat ────────────────────────────────────────────────────────────────
+
+  /// Sends a natural-language question to the [scan-chat] Edge Function with
+  /// the user's receipt context. Returns `null` when offline or on failure.
+  Future<String?> askQuestion({
+    required String message,
+    required List<Receipt> receipts,
+    required String currency,
+  }) async {
+    if (!Env.hasSupabase) return null;
+
+    final context = receipts.take(200).map((r) => {
+          'date': DateFormat('yyyy-MM-dd').format(r.date),
+          'merchant': r.merchant,
+          'amount': r.total.amount,
+          'currency': r.total.currency,
+          'category': r.category.label,
+        }).toList();
+
+    try {
+      final res = await _sb.functions.invoke(
+        'scan-chat',
+        body: {
+          'message': message,
+          'currency': currency,
+          'receipt_context': context,
+        },
+      );
+      final data = res.data as Map?;
+      if (data?['error'] != null) return null;
+      return data?['reply'] as String?;
     } catch (_) {
       return null;
     }

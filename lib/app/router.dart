@@ -13,7 +13,6 @@ import '../features/dashboard/monthly_review_screen.dart';
 import '../features/auth/auth_screen.dart';
 import '../features/auth/phone_otp_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
-import '../features/paywall/mpesa_stk_screen.dart';
 import '../features/paywall/paywall_screen.dart';
 import '../features/paywall/pesapal_screen.dart';
 import '../features/receipts/receipt_detail_screen.dart';
@@ -23,7 +22,11 @@ import '../features/history/history_screen.dart';
 import '../features/history/yearly_review_screen.dart';
 import '../features/scan/review_screen.dart';
 import '../features/scan/scan_screen.dart';
+import '../features/budgets/budget_screen.dart';
+import '../features/export/export_screen.dart';
+import '../features/leaks/leaks_screen.dart';
 import '../features/search/search_screen.dart';
+import '../features/suppliers/suppliers_screen.dart';
 import 'app_shell.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
@@ -145,14 +148,12 @@ final _routes = <RouteBase>[
       builder: (c, s) => const PaywallScreen(),
     ),
     GoRoute(
-      path: '/paywall/mpesa',
-      parentNavigatorKey: _rootKey,
-      builder: (c, s) => MpesaStkScreen(tier: s.extra as SubscriptionTier),
-    ),
-    GoRoute(
       path: '/paywall/pesapal',
       parentNavigatorKey: _rootKey,
-      builder: (c, s) => PesapalScreen(tier: s.extra as SubscriptionTier),
+      builder: (c, s) {
+        final args = s.extra as PaymentArgs;
+        return PesapalScreen(tier: args.tier, billingPeriod: args.billingPeriod);
+      },
     ),
     GoRoute(
       path: '/auth',
@@ -180,5 +181,25 @@ final _routes = <RouteBase>[
       parentNavigatorKey: _rootKey,
       builder: (c, s) => YearlyReviewScreen(
           year: int.parse(s.pathParameters['year']!)),
+    ),
+    GoRoute(
+      path: '/budget',
+      parentNavigatorKey: _rootKey,
+      builder: (c, s) => const BudgetScreen(),
+    ),
+    GoRoute(
+      path: '/leaks',
+      parentNavigatorKey: _rootKey,
+      builder: (c, s) => const LeaksScreen(),
+    ),
+    GoRoute(
+      path: '/suppliers',
+      parentNavigatorKey: _rootKey,
+      builder: (c, s) => const SuppliersScreen(),
+    ),
+    GoRoute(
+      path: '/export',
+      parentNavigatorKey: _rootKey,
+      builder: (c, s) => const ExportScreen(),
     ),
 ];

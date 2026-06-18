@@ -2,12 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-
 import '../../app/providers.dart';
 import '../../core/money.dart';
 import '../../core/theme/app_theme.dart';
-import '../../data/models/category.dart';
 import '../../data/models/yearly_review.dart';
 import '../../features/dashboard/analytics.dart';
 

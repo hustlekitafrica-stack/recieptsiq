@@ -7,7 +7,6 @@ import '../../app/providers.dart';
 import '../../app/subscription_provider.dart';
 import '../../core/money.dart';
 import '../../core/theme/app_theme.dart';
-import '../../data/models/category.dart';
 import '../../data/models/monthly_review.dart';
 import '../../data/models/receipt.dart';
 import '../../data/models/subscription_tier.dart';

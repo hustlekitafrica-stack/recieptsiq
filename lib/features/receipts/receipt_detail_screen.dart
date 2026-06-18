@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../app/providers.dart';
 import '../../core/money.dart';
 import '../../core/widgets/receipt_image.dart';
-import '../../data/models/category.dart';
 import '../../data/models/receipt.dart';
 
 class ReceiptDetailScreen extends ConsumerWidget {

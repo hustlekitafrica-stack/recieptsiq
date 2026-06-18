@@ -35,21 +35,46 @@ serve(async (req) => {
       return new Response('ok', { status: 200 });
     }
 
+    // Try to match by direct provider_ref first; for recurring charges Pesapal
+    // may use a new merchant reference, so also look for the subscription tracking id.
     const { data: tx } = await supabase.from('payment_transactions')
-      .select('user_id, tier').eq('provider_ref', orderMerchantRef).single();
+      .select('user_id, tier, metadata')
+      .or(`provider_ref.eq.${orderMerchantRef},metadata->>order_tracking_id.eq.${orderTrackingId}`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
     if (!tx) return new Response('tx not found', { status: 404 });
 
+    const billingPeriod: string = tx.metadata?.billing_period ?? 'monthly';
+    const isYearly = billingPeriod === 'yearly';
+
+    // Extend from NOW (handles both initial and renewal charges correctly)
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
+    if (isYearly) {
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+    } else {
+      expiresAt.setDate(expiresAt.getDate() + 30);
+    }
+
+    // Pesapal may return a subscription_id for recurring billing
+    const pesapalSubscriptionId: string | null =
+      statusData.subscription_id ?? orderMerchantRef ?? null;
 
     await supabase.from('user_subscriptions').upsert({
-      user_id: tx.user_id, tier: tx.tier, payment_provider: 'pesapal',
-      expires_at: expiresAt.toISOString(), auto_renew: false,
+      user_id: tx.user_id,
+      tier: tx.tier,
+      payment_provider: 'pesapal',
+      expires_at: expiresAt.toISOString(),
+      auto_renew: true,
+      billing_period: billingPeriod,
+      pesapal_subscription_id: pesapalSubscriptionId,
       updated_at: new Date().toISOString(),
     });
 
     await supabase.from('payment_transactions')
-      .update({ status: 'confirmed', metadata: statusData }).eq('provider_ref', orderMerchantRef);
+      .update({ status: 'confirmed', metadata: { ...statusData, billing_period: billingPeriod } })
+      .eq('provider_ref', orderMerchantRef);
 
     return new Response('ok', { status: 200 });
   } catch (err) {

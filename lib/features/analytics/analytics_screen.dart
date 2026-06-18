@@ -10,7 +10,6 @@ import '../../core/money.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/category.dart';
 import '../../data/models/receipt.dart';
-import '../../features/dashboard/analytics.dart';
 
 class AnalyticsScreen extends ConsumerWidget {
   const AnalyticsScreen({super.key});
@@ -86,6 +85,34 @@ class AnalyticsScreen extends ConsumerWidget {
               const SizedBox(height: 10),
               _TopMerchantsCard(
                   merchants: topMerchants, currency: currency),
+              const SizedBox(height: 20),
+
+              // ── Intelligence & Export ───────────────────────────────────
+              const _SectionTitle('Tools'),
+              const SizedBox(height: 10),
+              _ActionCard(
+                icon: Icons.store_outlined,
+                title: 'Supplier Intelligence',
+                subtitle: 'Track price trends and purchase frequency per supplier',
+                color: AppTheme.brand,
+                onTap: () => context.push('/suppliers'),
+              ),
+              const SizedBox(height: 8),
+              _ActionCard(
+                icon: Icons.warning_amber_outlined,
+                title: 'Money Leak Detector',
+                subtitle: 'Find where your business is losing money',
+                color: const Color(0xFFEF4444),
+                onTap: () => context.push('/leaks'),
+              ),
+              const SizedBox(height: 8),
+              _ActionCard(
+                icon: Icons.download_outlined,
+                title: 'Export Data',
+                subtitle: 'Export receipts as CSV or PDF report',
+                color: const Color(0xFF22C55E),
+                onTap: () => context.push('/export'),
+              ),
             ],
           );
         },
@@ -671,4 +698,44 @@ class _SectionTitle extends StatelessWidget {
         text,
         style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
       );
+}
+
+// ── Action card (for tools section) ──────────────────────────────────────────
+
+class _ActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+  const _ActionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        onTap: onTap,
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        title: Text(title,
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(subtitle,
+            style: const TextStyle(fontSize: 12)),
+        trailing:
+            const Icon(Icons.chevron_right, color: Color(0xFFCBD5E1)),
+      ),
+    );
+  }
 }

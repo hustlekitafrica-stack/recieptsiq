@@ -23,16 +23,23 @@ create policy "ocr_temp_delete_own" on storage.objects
 -- ───────────────────────────────────────────────────────────────────────────
 
 create table if not exists public.user_subscriptions (
-  user_id          uuid primary key references auth.users (id) on delete cascade,
-  tier             text not null default 'free',
-  payment_provider text,
-  expires_at       timestamptz,
-  auto_renew       boolean not null default false,
-  phone_number     text,
-  country_code     text,
-  provider_ref     text,
-  updated_at       timestamptz not null default now()
+  user_id                  uuid primary key references auth.users (id) on delete cascade,
+  tier                     text not null default 'free',
+  payment_provider         text,
+  expires_at               timestamptz,
+  auto_renew               boolean not null default false,
+  phone_number             text,
+  country_code             text,
+  provider_ref             text,
+  billing_period           text not null default 'monthly',
+  pesapal_subscription_id  text,
+  updated_at               timestamptz not null default now()
 );
+
+alter table public.user_subscriptions
+  add column if not exists billing_period          text not null default 'monthly';
+alter table public.user_subscriptions
+  add column if not exists pesapal_subscription_id text;
 -- ReceiptIQ — Supabase schema
 -- Run this in the Supabase SQL Editor (Dashboard -> SQL -> New query -> paste -> Run).
 -- Safe to re-run: uses IF NOT EXISTS / CREATE OR REPLACE where possible.

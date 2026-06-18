@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/config/subscription_config.dart';
 import '../core/services/subscription_service.dart';
@@ -64,6 +65,24 @@ final tierCapabilitiesProvider = Provider<TierCapabilities>((ref) {
   return SubscriptionConfig.capsFor(tier);
 });
 
+// ── Full subscription record from Supabase ────────────────────────────────────
+
+/// Fetches the raw subscription row so the UI can show provider / auto_renew details.
+final userSubscriptionRecordProvider =
+    FutureProvider<Map<String, dynamic>?>((ref) async {
+  // Re-run whenever the tier changes (purchase / cancellation)
+  ref.watch(subscriptionTierProvider);
+  final user = Supabase.instance.client.auth.currentUser;
+  if (user == null || user.isAnonymous) return null;
+  final response = await Supabase.instance.client
+      .from('user_subscriptions')
+      .select(
+          'tier, payment_provider, auto_renew, billing_period, expires_at, pesapal_subscription_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+  return response;
+});
+
 // ── Usage stats ───────────────────────────────────────────────────────────────
 
 final scansThisMonthProvider = Provider<int>((ref) {
@@ -74,5 +93,6 @@ final scansThisMonthProvider = Provider<int>((ref) {
 final canScanProvider = Provider<bool>((ref) {
   final caps = ref.watch(tierCapabilitiesProvider);
   final usage = ref.watch(usageServiceProvider);
-  return usage?.canScan(caps.maxScansPerMonth) ?? true;
+  if (usage == null) return false; // prefs not loaded yet — block silently
+  return usage.canScan(caps.maxScansPerMonth);
 });

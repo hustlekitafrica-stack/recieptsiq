@@ -6,6 +6,8 @@ class SubscriptionConfig {
   // ── RevenueCat product IDs (Google Play) ─────────────────────────────────
   static const rcStarterMonthly = 'receiptiq_starter_monthly';
   static const rcProMonthly = 'receiptiq_pro_monthly';
+  static const rcStarterYearly = 'receiptiq_starter_yearly';
+  static const rcProYearly = 'receiptiq_pro_yearly';
 
   // ── RevenueCat entitlement IDs ────────────────────────────────────────────
   static const entitlementStarter = 'starter';

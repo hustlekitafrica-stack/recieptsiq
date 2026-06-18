@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../app/providers.dart';
-import '../../data/models/category.dart';
 import '../../data/models/receipt.dart';
 
 class ReceiptsScreen extends ConsumerWidget {
