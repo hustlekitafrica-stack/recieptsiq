@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/subscription_provider.dart';
 import '../../core/theme/app_theme.dart';
@@ -69,7 +70,14 @@ class _LockedOverlay extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed: () => context.push('/paywall'),
+              onPressed: () {
+                bool isAnon = true;
+                try {
+                  final u = Supabase.instance.client.auth.currentUser;
+                  isAnon = u == null || u.isAnonymous;
+                } catch (_) {}
+                context.push(isAnon ? '/auth' : '/paywall');
+              },
               icon: const Icon(Icons.rocket_launch_outlined, size: 18),
               label: Text('Upgrade to $tierName'),
               style: FilledButton.styleFrom(

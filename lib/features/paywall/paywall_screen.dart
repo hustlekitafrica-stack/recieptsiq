@@ -420,25 +420,30 @@ class _TierCard extends StatelessWidget {
 // ── Feature comparison table ──────────────────────────────────────────────────
 
 class _FeatureTable extends StatelessWidget {
+  static const _free   = _TierStyle(Color(0xFF64748B), Color(0xFFF1F5F9));
+  static const _start  = _TierStyle(AppTheme.brand,    Color(0xFFEEF2FF));
+  static const _pro    = _TierStyle(Colors.white,      AppTheme.brand);
+
   @override
   Widget build(BuildContext context) {
+    // Compact values — all ≤ 5 chars so they never wrap at flex:1 column width.
     final rows = [
-      _FeatureRow('Receipt scans / month', '10', '50', 'Unlimited'),
-      _FeatureRow('History', '90 days', '12 months', 'All time'),
-      _FeatureRow('Business Health Score', 'Score only', 'Full', 'Full'),
-      _FeatureRow('AI Monthly Review', null, '✓', '✓'),
-      _FeatureRow('AI Assistant (Ask AI)', null, '30 / month', 'Unlimited'),
-      _FeatureRow('Supplier Intelligence', null, '✓', '✓'),
-      _FeatureRow('Money Leak Detector', '1 leak', 'All leaks', 'All leaks'),
-      _FeatureRow('CSV Export', null, '✓', '✓'),
-      _FeatureRow('PDF Export', null, null, '✓'),
-      _FeatureRow('AI Yearly Review', null, null, '✓'),
-      _FeatureRow('Support', 'Community', 'Email', 'Priority'),
+      _FR('Receipt scans / month', '10',    '50',    '∞'),
+      _FR('History',               '90 d',  '1 yr',  '∞'),
+      _FR('Business Health Score', 'Basic', 'Full',  'Full'),
+      _FR('AI Monthly Review',     null,    'check', 'check'),
+      _FR('AI Assistant',          null,    '30/mo', '∞'),
+      _FR('Supplier Intelligence', null,    'check', 'check'),
+      _FR('Money Leak Detector',   '1',     'All',   'All'),
+      _FR('CSV Export',            null,    'check', 'check'),
+      _FR('PDF Export',            null,    null,    'check'),
+      _FR('AI Yearly Review',      null,    null,    'check'),
+      _FR('Support',               'Forum', 'Email', 'VIP'),
     ];
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -446,80 +451,142 @@ class _FeatureTable extends StatelessWidget {
               'Compare plans',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
+            // ── Tier header pills ────────────────────────────────────────────
             Row(
-              children: const [
-                Expanded(flex: 3, child: SizedBox()),
-                Expanded(
-                  child: Text('Free',
-                      textAlign: TextAlign.center,
-                      style:
-                          TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-                ),
-                Expanded(
-                  child: Text('Starter',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                          color: AppTheme.brand)),
-                ),
-                Expanded(
-                  child: Text('Pro',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                          color: AppTheme.brand)),
-                ),
+              children: [
+                const Expanded(flex: 3, child: SizedBox()),
+                Expanded(child: _tierPill('Free',    _free)),
+                const SizedBox(width: 4),
+                Expanded(child: _tierPill('Starter', _start)),
+                const SizedBox(width: 4),
+                Expanded(child: _tierPill('Pro',     _pro)),
               ],
             ),
-            const Divider(height: 16),
-            ...rows.map((r) => r.build()),
+            const SizedBox(height: 10),
+            // ── Feature rows ─────────────────────────────────────────────────
+            ...rows.indexed.map(
+              (e) => _FeatureRow(
+                row: e.$2,
+                shaded: e.$1.isEven,
+                freeStyle: _free,
+                startStyle: _start,
+                proStyle: _pro,
+              ),
+            ),
+            // ── Legend ───────────────────────────────────────────────────────
+            const SizedBox(height: 8),
+            const Text(
+              '∞ = Unlimited',
+              style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _tierPill(String label, _TierStyle style) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      decoration: BoxDecoration(
+        color: style.bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: style.fg,
         ),
       ),
     );
   }
 }
 
-class _FeatureRow {
+// Lightweight data holder
+class _FR {
   final String label;
-  final String? free;
-  final String? starter;
-  final String? pro;
-  const _FeatureRow(this.label, this.free, this.starter, this.pro);
+  final String? free, starter, pro;
+  const _FR(this.label, this.free, this.starter, this.pro);
+}
 
-  Widget build() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+class _TierStyle {
+  final Color fg, bg;
+  const _TierStyle(this.fg, this.bg);
+}
+
+class _FeatureRow extends StatelessWidget {
+  final _FR row;
+  final bool shaded;
+  final _TierStyle freeStyle, startStyle, proStyle;
+
+  const _FeatureRow({
+    required this.row,
+    required this.shaded,
+    required this.freeStyle,
+    required this.startStyle,
+    required this.proStyle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: shaded ? const Color(0xFFF8FAFC) : Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 2),
       child: Row(
         children: [
           Expanded(
             flex: 3,
-            child: Text(label,
-                style:
-                    const TextStyle(fontSize: 12, color: Color(0xFF475569))),
+            child: Text(
+              row.label,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+            ),
           ),
-          Expanded(child: _cell(free)),
-          Expanded(child: _cell(starter, highlight: true)),
-          Expanded(child: _cell(pro, highlight: true)),
+          Expanded(child: _cell(row.free,    freeStyle,  solid: false)),
+          const SizedBox(width: 4),
+          Expanded(child: _cell(row.starter, startStyle, solid: false)),
+          const SizedBox(width: 4),
+          Expanded(child: _cell(row.pro,     proStyle,   solid: true)),
         ],
       ),
     );
   }
 
-  Widget _cell(String? text, {bool highlight = false}) {
-    if (text == null) {
-      return const Icon(Icons.remove, size: 14, color: Color(0xFFCBD5E1));
+  Widget _cell(String? value, _TierStyle style, {required bool solid}) {
+    if (value == null) {
+      return const Center(
+        child: Icon(Icons.remove, size: 13, color: Color(0xFFCBD5E1)),
+      );
     }
-    return Text(
-      text,
-      textAlign: TextAlign.center,
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w600,
-        color: highlight ? AppTheme.brand : const Color(0xFF475569),
+    if (value == 'check') {
+      return Center(
+        child: Icon(Icons.check_circle_outline,
+            size: 15, color: solid ? AppTheme.brand : AppTheme.brand),
+      );
+    }
+    // Text chip
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: style.bg,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          value,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: style.fg,
+          ),
+        ),
       ),
     );
   }

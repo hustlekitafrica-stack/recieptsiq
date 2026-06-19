@@ -4,11 +4,38 @@ import 'package:go_router/go_router.dart';
 import '../core/theme/app_theme.dart';
 
 /// Bottom-navigation shell with a central Scan button.
-class AppShell extends StatelessWidget {
+class AppShell extends StatefulWidget {
   final Widget child;
   const AppShell({super.key, required this.child});
 
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+  late final Animation<double> _scale;
+
   static const _tabs = ['/dashboard', '/receipts', '/analytics', '/search'];
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+    _scale = Tween<double>(begin: 1.0, end: 1.10).animate(
+      CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
 
   int _indexFor(String location) {
     final i = _tabs.indexWhere((t) => location.startsWith(t));
@@ -21,15 +48,18 @@ class AppShell extends StatelessWidget {
     final index = _indexFor(location);
 
     return Scaffold(
-      body: child,
+      body: widget.child,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push('/scan'),
-        backgroundColor: AppTheme.brand,
-        foregroundColor: Colors.white,
-        elevation: 2,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.document_scanner_outlined, size: 28),
+      floatingActionButton: ScaleTransition(
+        scale: _scale,
+        child: FloatingActionButton(
+          onPressed: () => context.push('/scan'),
+          backgroundColor: AppTheme.brand,
+          foregroundColor: Colors.white,
+          elevation: 2,
+          shape: const CircleBorder(),
+          child: const Icon(Icons.document_scanner_outlined, size: 28),
+        ),
       ),
       bottomNavigationBar: BottomAppBar(
         height: 68,

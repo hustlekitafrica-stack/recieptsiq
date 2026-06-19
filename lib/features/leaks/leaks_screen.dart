@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/providers.dart';
 import '../../app/subscription_provider.dart';
@@ -313,7 +313,14 @@ class _LeakUpgradeTeaser extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             FilledButton.icon(
-              onPressed: () => context.push('/paywall'),
+              onPressed: () {
+                bool isAnon = true;
+                try {
+                  final u = Supabase.instance.client.auth.currentUser;
+                  isAnon = u == null || u.isAnonymous;
+                } catch (_) {}
+                context.push(isAnon ? '/auth' : '/paywall');
+              },
               icon: const Icon(Icons.rocket_launch_outlined, size: 18),
               label: const Text('Upgrade to Starter'),
               style: FilledButton.styleFrom(

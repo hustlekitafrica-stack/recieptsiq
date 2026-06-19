@@ -147,19 +147,21 @@ class DashboardScreen extends ConsumerWidget {
                   error: (_, __) => const SizedBox.shrink(),
                 ),
               ],
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    await Supabase.instance.client.auth.signOut();
-                    if (context.mounted) context.go('/auth');
-                  },
-                  child: const Text('Sign out',
-                      style: TextStyle(color: Color(0xFFDC2626))),
+              if (!isAnon) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await Supabase.instance.client.auth.signOut();
+                      if (context.mounted) context.go('/auth');
+                    },
+                    child: const Text('Sign out',
+                        style: TextStyle(color: Color(0xFFDC2626))),
+                  ),
                 ),
-              ),
+              ],
               SizedBox(
                 width: double.infinity,
                 child: TextButton(
@@ -1000,7 +1002,14 @@ class _HealthScoreCard extends ConsumerWidget {
               )
             else
               GestureDetector(
-                onTap: () => context.push('/paywall'),
+                onTap: () {
+                  bool isAnon = true;
+                  try {
+                    final u = Supabase.instance.client.auth.currentUser;
+                    isAnon = u == null || u.isAnonymous;
+                  } catch (_) {}
+                  context.push(isAnon ? '/auth' : '/paywall');
+                },
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
