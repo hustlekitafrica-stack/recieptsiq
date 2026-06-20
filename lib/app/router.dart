@@ -81,11 +81,19 @@ GoRouter createAppRouter({required bool onboarded}) {
       }
       User? user;
       try { user = Supabase.instance.client.auth.currentUser; } catch (_) {}
-      final loggedIn = user != null;
-      final onAuth = state.matchedLocation.startsWith('/auth');
-      final onOnboarding = state.matchedLocation == '/onboarding';
-      if (!loggedIn && !onAuth && !onOnboarding) return '/auth';
-      if (loggedIn && onAuth) return '/dashboard';
+      final hasSession    = user != null;
+      final isAnon        = user?.isAnonymous ?? false;
+      final hasRealAccount = hasSession && !isAnon;
+      final onAuth        = state.matchedLocation.startsWith('/auth');
+      final onOnboarding  = state.matchedLocation == '/onboarding';
+      final onPaywall     = state.matchedLocation.startsWith('/paywall');
+
+      // No session at all → force sign-in
+      if (!hasSession && !onAuth && !onOnboarding) return '/auth';
+      // Real (non-anon) account on auth screens → already signed in
+      if (hasRealAccount && onAuth) return '/dashboard';
+      // Anonymous user hitting any paywall/upgrade route → must create account first
+      if (isAnon && onPaywall) return '/auth';
       return null;
     },
     routes: _routes,

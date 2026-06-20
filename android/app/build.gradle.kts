@@ -21,6 +21,7 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
+        multiDexEnabled = true
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -30,6 +31,11 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // Disable R8/ProGuard — prevents stripping runtime-critical code from
+            // plugins (supabase_flutter, purchases_flutter, webview_flutter) which
+            // causes silent black-screen crashes in release mode.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
