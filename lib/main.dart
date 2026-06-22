@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/router.dart';
 import 'core/config/env.dart';
+import 'core/services/notification_service.dart';
 import 'core/services/subscription_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/onboarding/onboarding_screen.dart';
@@ -88,6 +89,9 @@ Future<void> main() async {
       // Non-fatal: offline / misconfigured key.
     }
   }
+
+  // Initialise push notifications.
+  await NotificationService.initialize();
 
   runZonedGuarded(
     () => runApp(ProviderScope(

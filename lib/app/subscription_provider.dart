@@ -94,5 +94,15 @@ final canScanProvider = Provider<bool>((ref) {
   final caps = ref.watch(tierCapabilitiesProvider);
   final usage = ref.watch(usageServiceProvider);
   if (usage == null) return false; // prefs not loaded yet — block silently
+  User? user;
+  try { user = Supabase.instance.client.auth.currentUser; } catch (_) {}
+  if (user == null || user.isAnonymous) {
+    return usage.canGuestScan(SubscriptionConfig.guestMaxScans);
+  }
   return usage.canScan(caps.maxScansPerMonth);
+});
+
+/// How many lifetime guest scans have been used (anonymous users only).
+final guestScansUsedProvider = Provider<int>((ref) {
+  return ref.watch(usageServiceProvider)?.guestScansUsed ?? 0;
 });

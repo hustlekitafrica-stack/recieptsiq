@@ -5,9 +5,13 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/services/notification_service.dart';
+import '../../data/models/subscription_tier.dart';
+
 class PhoneOtpScreen extends StatefulWidget {
   final String email;
-  const PhoneOtpScreen({super.key, required this.email});
+  final bool isUpgrade;
+  const PhoneOtpScreen({super.key, required this.email, this.isUpgrade = false});
 
   @override
   State<PhoneOtpScreen> createState() => _PhoneOtpScreenState();
@@ -50,10 +54,14 @@ class _PhoneOtpScreenState extends State<PhoneOtpScreen> {
   Future<void> _resendOtp() async {
     setState(() { _loading = true; _error = null; });
     try {
-      await _sb.auth.signInWithOtp(
-        email: widget.email,
-        shouldCreateUser: true,
-      );
+      if (widget.isUpgrade) {
+        await _sb.auth.updateUser(UserAttributes(email: widget.email));
+      } else {
+        await _sb.auth.signInWithOtp(
+          email: widget.email,
+          shouldCreateUser: true,
+        );
+      }
       _startCountdown();
     } on AuthException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -71,8 +79,13 @@ class _PhoneOtpScreenState extends State<PhoneOtpScreen> {
       await _sb.auth.verifyOTP(
         email: widget.email,
         token: _otp,
-        type: OtpType.email,
+        type: widget.isUpgrade ? OtpType.emailChange : OtpType.email,
       );
+      // Tag device with real user identity for push notification targeting.
+      final user = _sb.auth.currentUser;
+      if (user != null) {
+        await NotificationService.tagUser(user, SubscriptionTier.free);
+      }
       if (mounted) context.go('/dashboard');
     } on AuthException catch (e) {
       if (mounted) {

@@ -71,9 +71,9 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
               const SizedBox(height: 10),
               Text(
                 isAnon
-                    ? "You've used all 5 free scans. Sign in to purchase "
-                        'more credits and keep tracking your spending.'
-                    : "You've used all 5 free scans this month. "
+                    ? "You've used your 2 free scans. Upgrade to a plan "
+                        'to get more scans and keep your receipts forever.'
+                    : "You've used all your free scans this month. "
                         'Upgrade your plan to scan more receipts.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
@@ -85,19 +85,13 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                 child: FilledButton.icon(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    if (isAnon) {
-                      context.push('/auth');
-                    } else {
-                      context.push('/paywall');
-                    }
+                    context.push('/paywall');
                   },
-                  icon: Icon(
-                    isAnon
-                        ? Icons.login_outlined
-                        : Icons.rocket_launch_outlined,
+                  icon: const Icon(
+                    Icons.rocket_launch_outlined,
                     size: 18,
                   ),
-                  label: Text(isAnon ? 'Sign in to continue' : 'View plans'),
+                  label: const Text('View plans'),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(52),
                   ),
@@ -166,8 +160,17 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
       final draft = await extractor.extract(text, fallbackCurrency: currency);
       draft.imagePath = image.path;
 
-      // Record successful scan against the usage counter.
-      await ref.read(usageServiceProvider)?.recordScan();
+      // Record successful scan against the appropriate counter.
+      final usage = ref.read(usageServiceProvider);
+      User? _u;
+      try { _u = Supabase.instance.client.auth.currentUser; } catch (_) {}
+      if (_u == null || _u.isAnonymous) {
+        await usage?.recordGuestScan();
+      } else {
+        await usage?.recordScan();
+      }
+      ref.invalidate(canScanProvider);
+      ref.invalidate(scansThisMonthProvider);
 
       if (!mounted) return;
       setState(() => _busy = false);
@@ -254,9 +257,9 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
             const SizedBox(height: 12),
             Text(
               isAnon
-                  ? "You've used all 5 free scans. Sign in to purchase "
-                      'more credits and keep tracking your spending.'
-                  : "You've used all 5 free scans this month. "
+                  ? "You've used your 2 free scans. Upgrade to a plan "
+                      'to get more scans and keep your receipts forever.'
+                  : "You've used all your free scans this month. "
                       'Upgrade your plan to scan more receipts.',
               textAlign: TextAlign.center,
               style: const TextStyle(
@@ -264,20 +267,12 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
             ),
             const Spacer(),
             FilledButton.icon(
-              onPressed: () {
-                if (isAnon) {
-                  context.push('/auth');
-                } else {
-                  context.push('/paywall');
-                }
-              },
-              icon: Icon(
-                isAnon
-                    ? Icons.login_outlined
-                    : Icons.rocket_launch_outlined,
+              onPressed: () => context.push('/paywall'),
+              icon: const Icon(
+                Icons.rocket_launch_outlined,
                 size: 18,
               ),
-              label: Text(isAnon ? 'Sign in to continue' : 'View plans'),
+              label: const Text('View plans'),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(52),
               ),

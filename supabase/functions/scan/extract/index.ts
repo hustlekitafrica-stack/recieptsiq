@@ -26,16 +26,38 @@ Schema:
   "total": number,
   "vat": number|null,
   "currency": string,           // ISO 4217, default "${currency}"
-  "category": string,           // one of: ${CATEGORIES}
+  "category": string,           // dominant item category (see rules below)
   "items": [
-    { "name": string, "quantity": number, "unit_price": number, "amount": number }
+    { "name": string, "quantity": number, "unit_price": number, "amount": number, "category": string }
   ]
 }
 
-Rules:
-- Numbers are plain numbers (no currency symbols or thousands separators).
-- If a field is missing use a sensible default (0, null, or "${currency}").
-- Pick the single best category from the allowed list.`;
+ITEM CATEGORY RULES — read carefully:
+1. Every item MUST have its own specific category that describes WHAT THAT ITEM IS.
+   Use granular, real-world labels, e.g.:
+   "Cooking Oil", "White Sugar", "Wheat Flour", "Tomato Sauce", "Mineral Water",
+   "Bread", "Fresh Milk", "Eggs", "Laundry Detergent", "Dish Soap",
+   "Mobile Airtime", "Internet Data", "Prescription Drug", "Vitamins",
+   "School Notebook", "Pens & Stationery", "Engine Oil", "Petrol",
+   "Electricity", "Rent", "Staff Salary", "Packaging Material",
+   "Building Materials", "Hardware Tools", "Printer Paper", "Clothing"
+2. NEVER apply the same generic label to every item on the receipt.
+   Each item's category must reflect that specific item, not a catch-all bucket.
+3. NEVER use vague labels like "groceries", "household", "baking_supplies",
+   "general", "items", "goods", "products", or "miscellaneous" for individual items.
+4. The top-level "category" field must equal the most common category among the items
+   (by count). Do not invent a new label for the receipt level.
+
+NUMBER RULES:
+- Plain numbers only — no currency symbols or thousands separators.
+- Missing fields: use sensible defaults (0, null, or "${currency}").
+
+VAT RULES — always extract or compute:
+- If the receipt shows a VAT/Tax total line, use that value.
+- Kenyan receipts use tax codes: A = 16% VAT, B = 8% VAT, E/F = exempt.
+  Sum VAT for taxable items: (amount / 1.16 × 0.16) for code A items.
+- If a VAT PIN or "TAX INVOICE" heading appears, VAT is included in the total — compute it.
+- Only set vat to null if the receipt is clearly VAT-exempt with no tax at all.`;
 }
 
 serve(async (req) => {

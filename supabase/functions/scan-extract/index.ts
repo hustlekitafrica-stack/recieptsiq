@@ -18,31 +18,42 @@ Extract the fields below from the receipt text. Respond with ONLY a JSON object,
 Schema:
 {
   "merchant": string,
-  "date": string,
+  "date": string,               // ISO 8601 date (YYYY-MM-DD)
   "total": number,
   "vat": number|null,
-  "currency": string,
-  "category": string,
+  "currency": string,           // ISO 4217, default "${currency}"
+  "category": string,           // dominant item category (see rules below)
   "items": [
     { "name": string, "quantity": number, "unit_price": number, "amount": number, "category": string }
   ]
 }
 
-Rules:
-- Numbers are plain numbers (no currency symbols or thousands separators).
-- If a field is missing use a sensible default (0, null, or "${currency}").
-- Categories: assign a short, specific, descriptive category to EACH item and to the overall receipt.
-  Be specific rather than generic — use labels like "Dairy", "Fresh Produce", "Cleaning Supplies",
-  "Petrol", "Electricity", "School Fees", "Prescription Medication", "Airtime", "Clothing" etc.
-  Common broad labels are fine when specific ones don't apply: "Groceries", "Fuel", "Utilities",
-  "Transport", "Entertainment", "Rent", "Medical", "School", "Business Supplies", "Staff Expenses".
-  Never leave category blank — default to "Other" only if truly uncategorisable.
-- VAT: always extract or calculate vat when possible. Never leave it null if tax information exists.
-  * If the receipt shows a VAT/Tax total line, use that value.
-  * Kenyan receipts use tax codes on line items: A = 16% VAT, B = 8% VAT, E/F = exempt (0%).
-    Sum the VAT amounts for all taxable items (amount / 1.16 * 0.16 for code A items).
-  * If a VAT registration number (PIN) or "TAX INVOICE" heading appears, VAT is likely included in the total — compute it.
-  * Only set vat to null if the receipt is clearly VAT-exempt with no tax at all.`;
+ITEM CATEGORY RULES — read carefully:
+1. Every item MUST have its own specific category that describes WHAT THAT ITEM IS.
+   Use granular, real-world labels, e.g.:
+   "Cooking Oil", "White Sugar", "Wheat Flour", "Tomato Sauce", "Mineral Water",
+   "Bread", "Fresh Milk", "Eggs", "Laundry Detergent", "Dish Soap",
+   "Mobile Airtime", "Internet Data", "Prescription Drug", "Vitamins",
+   "School Notebook", "Pens & Stationery", "Engine Oil", "Petrol",
+   "Electricity", "Rent", "Staff Salary", "Packaging Material",
+   "Building Materials", "Hardware Tools", "Printer Paper", "Clothing"
+2. NEVER apply the same generic label to every item on the receipt.
+   Each item's category must reflect that specific item, not a catch-all bucket.
+3. NEVER use vague labels like "groceries", "household", "baking_supplies",
+   "general", "items", "goods", "products", or "miscellaneous" for individual items.
+4. The top-level "category" field must equal the most common category among the items
+   (by count). Do not invent a new label for the receipt level.
+
+NUMBER RULES:
+- Plain numbers only — no currency symbols or thousands separators.
+- Missing fields: use sensible defaults (0, null, or "${currency}").
+
+VAT RULES — always extract or compute:
+- If the receipt shows a VAT/Tax total line, use that value.
+- Kenyan receipts use tax codes: A = 16% VAT, B = 8% VAT, E/F = exempt.
+  Sum VAT for taxable items: (amount / 1.16 × 0.16) for code A items.
+- If a VAT PIN or "TAX INVOICE" heading appears, VAT is included in the total — compute it.
+- Only set vat to null if the receipt is clearly VAT-exempt with no tax at all.`;
 }
 
 serve(async (req) => {

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../app/providers.dart';
+import '../../core/widgets/guest_nudge_banner.dart';
 import '../../data/models/receipt.dart';
 
 class ReceiptsScreen extends ConsumerWidget {
@@ -14,7 +15,10 @@ class ReceiptsScreen extends ConsumerWidget {
     final receiptsAsync = ref.watch(receiptsProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Receipts')),
-      body: receiptsAsync.when(
+      body: Column(
+        children: [
+          const GuestNudgeBanner(),
+          Expanded(child: receiptsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (receipts) {
@@ -47,6 +51,8 @@ class ReceiptsScreen extends ConsumerWidget {
             ],
           );
         },
+      )),
+        ],
       ),
     );
   }

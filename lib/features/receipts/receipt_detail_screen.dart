@@ -54,7 +54,6 @@ class ReceiptDetailScreen extends ConsumerWidget {
               child: Column(
                 children: [
                   _row('Merchant', receipt.merchant),
-                  _row('Category', receipt.category.label),
                   _row('Date', DateFormat.yMMMMd().format(receipt.date)),
                   _row('Total', receipt.total.format()),
                   if (receipt.vat != null)

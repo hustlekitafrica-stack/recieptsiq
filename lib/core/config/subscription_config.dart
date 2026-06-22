@@ -3,6 +3,9 @@ import '../../data/models/subscription_tier.dart';
 class SubscriptionConfig {
   SubscriptionConfig._();
 
+  // ── Guest scan cap (anonymous users, lifetime, hidden from UI) ───────────
+  static const guestMaxScans = 2;
+
   // ── RevenueCat product IDs (Google Play) ─────────────────────────────────
   static const rcStarterMonthly = 'receiptiq_starter_monthly';
   static const rcProMonthly = 'receiptiq_pro_monthly';

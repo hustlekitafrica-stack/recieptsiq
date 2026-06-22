@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/subscription_provider.dart';
 import '../../core/config/subscription_config.dart';
+import '../../core/services/notification_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/subscription_tier.dart';
 
@@ -20,6 +22,13 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   bool _busy = false;
 
   Future<void> _purchase() async {
+    // Anonymous users must create an account before paying.
+    User? _user;
+    try { _user = Supabase.instance.client.auth.currentUser; } catch (_) {}
+    if (_user == null || _user.isAnonymous) {
+      context.push('/auth');
+      return;
+    }
     setState(() => _busy = true);
     try {
       final result = await context.push<SubscriptionTier>(
@@ -28,6 +37,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       );
       if (result != null && mounted) {
         ref.read(subscriptionTierProvider.notifier).setTier(result);
+        await NotificationService.updateTier(result);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Welcome to ${result.name.toUpperCase()}! 🎉')),
         );

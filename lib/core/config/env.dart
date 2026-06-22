@@ -27,4 +27,11 @@ class Env {
   /// RevenueCat Google/Android API key (publishable — safe in binary).
   static String get revenueCatGoogleKey => _get('REVENUECAT_GOOGLE_KEY');
   static bool get hasRevenueCat => revenueCatGoogleKey.isNotEmpty;
+
+  /// OneSignal App ID (publishable — safe in binary).
+  static String get oneSignalAppId => _get('ONESIGNAL_APP_ID');
+  static bool get hasOneSignal => oneSignalAppId.isNotEmpty;
+
+  /// OneSignal REST API key — used ONLY in Supabase Edge Functions, never in the app binary.
+  static String get oneSignalRestKey => _get('ONESIGNAL_REST_KEY');
 }

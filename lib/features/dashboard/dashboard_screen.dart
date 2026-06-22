@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/providers.dart';
 import '../../app/subscription_provider.dart';
+import '../../core/widgets/guest_nudge_banner.dart';
 import '../../data/repositories/receipt_repository.dart';
 import '../../core/money.dart';
 import '../../core/theme/app_theme.dart';
@@ -296,6 +297,7 @@ class DashboardScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
             children: [
+              const GuestNudgeBanner(),
               _MonthPicker(
                 month: selectedMonth,
                 isCurrentMonth: isCurrentMonth,

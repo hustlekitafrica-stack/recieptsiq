@@ -4,8 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// The counter is stored in SharedPreferences and resets automatically when
 /// the calendar month changes. No network call is required to enforce limits.
 class UsageService {
-  static const _keyScans = 'usage_scans_count';
-  static const _keyMonth = 'usage_scans_month';
+  static const _keyScans      = 'usage_scans_count';
+  static const _keyMonth      = 'usage_scans_month';
+  static const _keyGuestScans = 'usage_guest_scans';
 
   final SharedPreferences _prefs;
   UsageService(this._prefs);
@@ -52,9 +53,25 @@ class UsageService {
     await _prefs.setString(_keyMonth, _currentBucket());
   }
 
+  // ── Guest (anonymous) lifetime counter ────────────────────────────────────
+
+  /// Total scans used as a guest — never resets (lifetime, not monthly).
+  int get guestScansUsed => _prefs.getInt(_keyGuestScans) ?? 0;
+
+  /// Returns true when the anonymous user is allowed one more scan.
+  bool canGuestScan(int max) => guestScansUsed < max;
+
+  /// Increments the lifetime guest scan counter.
+  Future<void> recordGuestScan() async {
+    await _prefs.setInt(_keyGuestScans, guestScansUsed + 1);
+  }
+
+  // ── Utilities ──────────────────────────────────────────────────────────────
+
   /// Clears all stored usage data.
   Future<void> clearAll() async {
     await _prefs.remove(_keyScans);
     await _prefs.remove(_keyMonth);
+    await _prefs.remove(_keyGuestScans);
   }
 }

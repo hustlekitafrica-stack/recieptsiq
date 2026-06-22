@@ -88,12 +88,10 @@ GoRouter createAppRouter({required bool onboarded}) {
       final onOnboarding  = state.matchedLocation == '/onboarding';
       final onPaywall     = state.matchedLocation.startsWith('/paywall');
 
-      // No session at all → force sign-in
-      if (!hasSession && !onAuth && !onOnboarding) return '/auth';
+      // Truly no session (not even anonymous) → force onboarding / sign-in.
+      if (!hasSession && !onAuth && !onOnboarding) return '/onboarding';
       // Real (non-anon) account on auth screens → already signed in
       if (hasRealAccount && onAuth) return '/dashboard';
-      // Anonymous user hitting any paywall/upgrade route → must create account first
-      if (isAnon && onPaywall) return '/auth';
       return null;
     },
     routes: _routes,
@@ -172,7 +170,13 @@ final _routes = <RouteBase>[
     GoRoute(
       path: '/auth/phone',
       parentNavigatorKey: _rootKey,
-      pageBuilder: (c, s) => _slidePage(PhoneOtpScreen(email: s.extra as String? ?? '')),
+      pageBuilder: (c, s) {
+        final args = s.extra as Map<String, dynamic>? ?? {};
+        return _slidePage(PhoneOtpScreen(
+          email: args['email'] as String? ?? '',
+          isUpgrade: args['upgrade'] as bool? ?? false,
+        ));
+      },
     ),
     GoRoute(
       path: '/history',

@@ -1,19 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/config/env.dart';
 import '../../core/theme/app_theme.dart';
 
 /// Shared-preferences key marking that the user finished onboarding.
 const kOnboardedKey = 'onboarded_v1';
-
-class _Slide {
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String body;
-  const _Slide(this.icon, this.color, this.title, this.body);
-}
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -23,143 +17,164 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  final _controller = PageController();
-  int _page = 0;
+  bool _loading = false;
 
-  static const _slides = <_Slide>[
-    _Slide(
-      Icons.document_scanner_outlined,
-      AppTheme.brand,
-      'Scan any receipt',
-      'Snap a photo and ReceiptIQ reads the merchant, total, VAT and items for '
-          'you — no typing required.',
-    ),
-    _Slide(
-      Icons.auto_awesome_outlined,
-      Color(0xFF0EA5E9),
-      'Understand your money',
-      'Every expense is auto-categorised and turned into clear charts so you '
-          'always know where your money goes.',
-    ),
-    _Slide(
-      Icons.insights_outlined,
-      AppTheme.accent,
-      'Know where your money goes',
-      'Track spending trends, explore top merchants, and get a personalised AI '
-          'review every month — all in one place.',
-    ),
-  ];
-
-  bool get _isLast => _page == _slides.length - 1;
-
-  Future<void> _finish() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(kOnboardedKey, true);
-    if (!mounted) return;
-    context.go('/dashboard');
-  }
-
-  void _next() {
-    if (_isLast) {
-      _finish();
-    } else {
-      _controller.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
+  Future<void> _startAsGuest() async {
+    setState(() => _loading = true);
+    try {
+      if (Env.hasSupabase) {
+        await Supabase.instance.client.auth
+            .signInAnonymously()
+            .timeout(const Duration(seconds: 10));
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(kOnboardedKey, true);
+      if (!mounted) return;
+      context.go('/scan');
+    } catch (_) {
+      // Network unavailable — still let them in; router allows unauthenticated
+      // users through to /onboarding so they won't be looped.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(kOnboardedKey, true);
+      if (!mounted) return;
+      context.go('/scan');
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  void _signIn() => context.push('/auth');
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: Column(
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: _finish,
-                child: Text(_isLast ? '' : 'Skip'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Column(
+            children: [
+              const Spacer(flex: 2),
+              // ── Brand icon ────────────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: AppTheme.brand.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.document_scanner_outlined,
+                    size: 72, color: AppTheme.brand),
               ),
-            ),
-            Expanded(
-              child: PageView.builder(
-                controller: _controller,
-                itemCount: _slides.length,
-                onPageChanged: (i) => setState(() => _page = i),
-                itemBuilder: (context, i) {
-                  final s = _slides[i];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 28),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(36),
-                          decoration: BoxDecoration(
-                            color: s.color.withValues(alpha: 0.10),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(s.icon, size: 88, color: s.color),
-                        ),
-                        const SizedBox(height: 40),
-                        Text(
-                          s.title,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              fontSize: 26, fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          s.body,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              fontSize: 15,
-                              height: 1.5,
-                              color: Color(0xFF64748B)),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(_slides.length, (i) {
-                final active = i == _page;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  height: 8,
-                  width: active ? 24 : 8,
-                  decoration: BoxDecoration(
-                    color: active ? AppTheme.brand : const Color(0xFFCBD5E1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                );
-              }),
-            ),
-            const SizedBox(height: 28),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _next,
-                  child: Text(_isLast ? 'Get started' : 'Next'),
+              const SizedBox(height: 32),
+              // ── Headline ──────────────────────────────────────────────────
+              const Text(
+                'Know where your\nmoney goes',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                  height: 1.15,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 14),
+              const Text(
+                'Scan any receipt. AI reads and categorises every item, '
+                'tracks your spending, and spots money leaks — for free.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 15, height: 1.55, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 32),
+              // ── Feature pills ─────────────────────────────────────────────
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: const [
+                  _Pill(Icons.camera_alt_outlined, 'Scan receipts'),
+                  _Pill(Icons.auto_awesome_outlined, 'AI categorisation'),
+                  _Pill(Icons.insights_outlined, 'Spending insights'),
+                  _Pill(Icons.lock_open_outlined, 'No signup needed'),
+                ],
+              ),
+              const Spacer(flex: 3),
+              // ── Primary CTA ───────────────────────────────────────────────
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _loading ? null : _startAsGuest,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(54),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  icon: _loading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2.5))
+                      : const Icon(Icons.camera_alt_outlined),
+                  label: const Text('Scan my first receipt — free',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w700)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // ── Secondary CTA ─────────────────────────────────────────────
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: _loading ? null : _signIn,
+                  child: const Text(
+                    'I already have an account',
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF64748B)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '2 free scans · No credit card · No spam',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _Pill(this.icon, this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppTheme.brand.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppTheme.brand),
+          const SizedBox(width: 5),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.brand)),
+        ],
       ),
     );
   }

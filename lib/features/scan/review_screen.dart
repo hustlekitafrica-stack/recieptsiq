@@ -29,6 +29,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
   late DateTime _date;
   late String _currency;
   late List<LineItem> _items;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -54,17 +55,19 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     super.dispose();
   }
 
-  /// Picks the most-frequent item category; used as the receipt-level category
-  /// so analytics and budgets continue to work without user input.
+  /// Picks the highest-spend item category as the receipt-level category so
+  /// analytics and budgets continue to work without user input.
+  /// Spend-weighted because each item now carries a specific unique category —
+  /// frequency count would be arbitrary when all categories are distinct.
   Category _dominantCategory() {
     if (_items.isEmpty) return Category.other;
-    final freq = <String, int>{};
+    final spend = <String, double>{};
     for (final it in _items) {
       final key = it.category?.key ?? Category.other.key;
-      freq[key] = (freq[key] ?? 0) + 1;
+      spend[key] = (spend[key] ?? 0) + it.amount;
     }
     final topKey =
-        freq.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+        spend.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
     return _items
             .firstWhere(
               (i) => (i.category?.key ?? Category.other.key) == topKey,
@@ -75,6 +78,8 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
     final repo = ref.read(repositoryProvider);
     final total = double.tryParse(_total.text.trim()) ?? 0;
     final vat = double.tryParse(_vat.text.trim());
@@ -95,32 +100,45 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
       createdAt: DateTime.now(),
     );
 
-    final existing = ref.read(receiptsProvider).valueOrNull ?? [];
-    await ref.read(receiptsProvider.notifier).add(receipt);
-    if (!mounted) return;
+    try {
+      final existing = ref.read(receiptsProvider).valueOrNull ?? [];
+      await ref.read(receiptsProvider.notifier).add(receipt);
+      if (!mounted) return;
 
-    final caps = ref.read(tierCapabilitiesProvider);
-    final insight = caps.postScanInsight
-        ? _buildPriceInsight(receipt, existing, _currency)
-        : null;
-    if (insight != null && mounted) {
-      await showModalBottomSheet<void>(
-        context: context,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (_) => _PostScanInsightSheet(
-          receipt: receipt,
-          insight: insight,
-        ),
-      );
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Receipt saved')),
-      );
+      final caps = ref.read(tierCapabilitiesProvider);
+      final insight = caps.postScanInsight
+          ? _buildPriceInsight(receipt, existing, _currency)
+          : null;
+      if (insight != null && mounted) {
+        await showModalBottomSheet<void>(
+          context: context,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (_) => _PostScanInsightSheet(
+            receipt: receipt,
+            insight: insight,
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Receipt saved')),
+        );
+      }
+      if (mounted) context.go('/receipts');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
-    if (mounted) context.go('/receipts');
   }
+
+  // ignore: avoid_void_async
+  void _saveGuarded() { _save().catchError((_) {}); }
 
   static String? _buildPriceInsight(
       Receipt newReceipt, List<Receipt> existing, String currency) {
@@ -363,10 +381,46 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _save,
-              icon: const Icon(Icons.check),
-              label: const Text('Save receipt'),
+            child: FilledButton(
+              onPressed: _saving ? null : _save,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 52),
+              ),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: _saving
+                    ? const Row(
+                        key: ValueKey('saving'),
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(width: 10),
+                          Text(
+                            'Saving…',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      )
+                    : const Row(
+                        key: ValueKey('idle'),
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.check, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'Save receipt',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+              ),
             ),
           ),
         ],

@@ -75,6 +75,9 @@ dependencies:
   # In-app subscriptions (RevenueCat)
   purchases_flutter: ^8.7.0
 
+  # Push notifications (OneSignal — wraps FCM, includes marketing dashboard)
+  onesignal_flutter: ^5.2.6
+
   # WebView for Flutterwave / Pesapal hosted checkout
   webview_flutter: ^4.10.0
 

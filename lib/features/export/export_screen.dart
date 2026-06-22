@@ -307,7 +307,8 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
               filtered.fold<double>(0, (s, r) => s + r.total.amount);
 
           return ListView(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.fromLTRB(
+                20, 20, 20, 20 + MediaQuery.paddingOf(context).bottom),
             children: [
               _DateRangeCard(
                 range: _range,

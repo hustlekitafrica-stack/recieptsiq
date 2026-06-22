@@ -13,11 +13,20 @@ class _AuthScreenState extends State<AuthScreen> {
   static const _green = Color(0xFF25D366);
 
   final _emailCtrl = TextEditingController();
-  bool    _loading     = false;
-  bool    _skipLoading  = false;
+  bool    _loading = false;
   String? _error;
 
   SupabaseClient get _sb => Supabase.instance.client;
+
+  /// True when the current Supabase session is an anonymous guest.
+  /// In this case we upgrade in-place rather than creating a new account.
+  bool get _isUpgrade {
+    try {
+      return _sb.auth.currentUser?.isAnonymous == true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   bool get _valid {
     final e = _emailCtrl.text.trim();
@@ -30,20 +39,6 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
-  Future<void> _skip() async {
-    setState(() { _skipLoading = true; _error = null; });
-    try {
-      await _sb.auth.signInAnonymously();
-      if (mounted) context.go('/dashboard');
-    } on AuthException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _skipLoading = false);
-    }
-  }
-
   Future<void> _sendOtp() async {
     final email = _emailCtrl.text.trim();
     if (!_valid) {
@@ -52,11 +47,15 @@ class _AuthScreenState extends State<AuthScreen> {
     }
     setState(() { _loading = true; _error = null; });
     try {
-      await _sb.auth.signInWithOtp(
-        email: email,
-        shouldCreateUser: true,
-      );
-      if (mounted) context.push('/auth/phone', extra: email);
+      if (_isUpgrade) {
+        // Upgrade anonymous session in-place — same user ID is preserved.
+        await _sb.auth.updateUser(UserAttributes(email: email));
+      } else {
+        await _sb.auth.signInWithOtp(email: email, shouldCreateUser: true);
+      }
+      if (mounted) {
+        context.push('/auth/phone', extra: {'email': email, 'upgrade': _isUpgrade});
+      }
     } on AuthException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {
@@ -68,8 +67,26 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isUpgrade = _isUpgrade;
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.close, color: Color(0xFF64748B)),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/dashboard');
+              }
+            },
+          ),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -84,9 +101,11 @@ class _AuthScreenState extends State<AuthScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Spacer(),
-                  const Text(
-                    'Sign in or create\nan account',
-                    style: TextStyle(
+                  Text(
+                    isUpgrade
+                        ? 'Create your\naccount'
+                        : 'Sign in or create\nan account',
+                    style: const TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
                       color: Color(0xFF0F172A),
@@ -94,10 +113,13 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    "Enter your email address to continue. We'll send "
-                    "you a one-time verification code.",
-                    style: TextStyle(
+                  Text(
+                    isUpgrade
+                        ? "Save your receipts permanently and unlock the "
+                            "full dashboard. We'll send a one-time code to verify your email."
+                        : "Enter your email address to continue. We'll send "
+                            "you a one-time verification code.",
+                    style: const TextStyle(
                       fontSize: 15,
                       color: Color(0xFF64748B),
                       height: 1.5,
@@ -192,29 +214,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const Spacer(),
                   const Divider(color: Color(0xFFE2E8F0)),
-                  const SizedBox(height: 8),
-                  Center(
-                    child: TextButton(
-                      onPressed: (_loading || _skipLoading) ? null : _skip,
-                      child: _skipLoading
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Color(0xFF94A3B8)),
-                            )
-                          : const Text(
-                              'Skip for now',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF94A3B8),
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 16),
                   Center(
                     child: Text.rich(
                       TextSpan(
