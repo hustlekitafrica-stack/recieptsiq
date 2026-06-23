@@ -9,8 +9,6 @@ final _receiptCacheManager = CacheManager(
     'receiptImages',
     stalePeriod: const Duration(days: 7),
     maxNrOfCacheObjects: 200,
-    repo: JsonCacheInfoRepository(databaseName: 'receipt_images'),
-    fileService: HttpFileService(),
   ),
 );
 

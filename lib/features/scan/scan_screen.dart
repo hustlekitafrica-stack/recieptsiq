@@ -9,8 +9,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../app/providers.dart';
 import '../../app/subscription_provider.dart';
 import '../../core/config/env.dart';
+import '../../core/config/subscription_config.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/receipt_draft.dart';
+import '../../data/models/subscription_tier.dart';
 
 class ScanScreen extends ConsumerStatefulWidget {
   const ScanScreen({super.key});

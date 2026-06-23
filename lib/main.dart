@@ -12,7 +12,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app/router.dart';
 import 'core/config/env.dart';
 import 'core/services/notification_service.dart';
-import 'core/services/subscription_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/onboarding/onboarding_screen.dart';
 
@@ -72,21 +71,6 @@ Future<void> main() async {
       ).timeout(const Duration(seconds: 10));
     } catch (_) {
       // Ignore init errors in MVP; local store still works.
-    }
-  }
-
-  // Initialise RevenueCat only when the key is present.
-  String? supabaseUserId;
-  if (Env.hasSupabase) {
-    try {
-      supabaseUserId = Supabase.instance.client.auth.currentUser?.id;
-    } catch (_) {}
-  }
-  if (Env.hasRevenueCat) {
-    try {
-      await SubscriptionService().configure(userId: supabaseUserId);
-    } catch (_) {
-      // Non-fatal: offline / misconfigured key.
     }
   }
 
