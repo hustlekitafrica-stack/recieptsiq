@@ -48,9 +48,44 @@ serve(async (req) => {
 
     const billingPeriod: string = tx.metadata?.billing_period ?? 'monthly';
     const isYearly = billingPeriod === 'yearly';
+    const isUpgrade = tx.metadata?.is_upgrade === true;
 
-    // Extend from NOW (handles both initial and renewal charges correctly)
-    const expiresAt = new Date();
+    // Calculate expiry date
+    let expiresAt: Date;
+    if (isUpgrade) {
+      // For upgrades, extend from existing subscription expiry
+      const { data: existingSub } = await supabase
+        .from('user_subscriptions')
+        .select('expires_at, pesapal_subscription_id')
+        .eq('user_id', tx.user_id)
+        .single();
+      
+      if (existingSub && existingSub.expires_at) {
+        expiresAt = new Date(existingSub.expires_at);
+        
+        // Cancel old Pesapal subscription if subscription_id exists
+        if (existingSub.pesapal_subscription_id) {
+          try {
+            await fetch(`${PESAPAL_BASE}/api/Subscription/CancelSubscription`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+              body: JSON.stringify({ subscription_id: existingSub.pesapal_subscription_id }),
+            });
+          } catch (cancelErr) {
+            console.error('Failed to cancel old Pesapal subscription:', cancelErr);
+            // Don't fail the upgrade if cancellation fails
+          }
+        }
+      } else {
+        // Fallback to NOW if no existing subscription found
+        expiresAt = new Date();
+      }
+    } else {
+      // New subscription: extend from NOW
+      expiresAt = new Date();
+    }
+
+    // Add the billing period
     if (isYearly) {
       expiresAt.setFullYear(expiresAt.getFullYear() + 1);
     } else {

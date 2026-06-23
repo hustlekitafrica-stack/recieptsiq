@@ -49,7 +49,7 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       if (_isUpgrade) {
         // Upgrade anonymous session in-place — same user ID is preserved.
-        await _sb.auth.updateUser(UserAttributes(email: email));
+        await _sb.auth.signInWithOtp(email: email, shouldCreateUser: true);
       } else {
         await _sb.auth.signInWithOtp(email: email, shouldCreateUser: true);
       }
@@ -102,9 +102,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 children: [
                   const Spacer(),
                   Text(
-                    isUpgrade
-                        ? 'Create your\naccount'
-                        : 'Sign in or create\nan account',
+                    'Sign in or create\nan account',
                     style: const TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
@@ -114,11 +112,8 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    isUpgrade
-                        ? "Save your receipts permanently and unlock the "
-                            "full dashboard. We'll send a one-time code to verify your email."
-                        : "Enter your email address to continue. We'll send "
-                            "you a one-time verification code.",
+                    "Enter your email address to continue. We'll send "
+                        "you a one-time verification code.",
                     style: const TextStyle(
                       fontSize: 15,
                       color: Color(0xFF64748B),

@@ -3,15 +3,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/config/subscription_config.dart';
-import '../core/services/subscription_service.dart';
 import '../core/services/usage_service.dart';
 import '../data/models/subscription_tier.dart';
 
 // ── Singletons ────────────────────────────────────────────────────────────────
-
-final subscriptionServiceProvider = Provider<SubscriptionService>((ref) {
-  return SubscriptionService();
-});
 
 final _prefsProvider = FutureProvider<SharedPreferences>((ref) async {
   return SharedPreferences.getInstance();
@@ -28,33 +23,66 @@ final usageServiceProvider = Provider<UsageService?>((ref) {
 // ── Current subscription tier ─────────────────────────────────────────────────
 
 /// Exposes the user's active [SubscriptionTier].
-/// Invalidate this provider after a successful purchase or restore.
+/// Invalidate this provider after a successful Pesapal payment.
 final subscriptionTierProvider =
     StateNotifierProvider<SubscriptionTierNotifier, SubscriptionTier>((ref) {
-  final service = ref.watch(subscriptionServiceProvider);
-  return SubscriptionTierNotifier(service);
+  return SubscriptionTierNotifier();
 });
 
 class SubscriptionTierNotifier extends StateNotifier<SubscriptionTier> {
-  final SubscriptionService _service;
-
-  SubscriptionTierNotifier(this._service) : super(SubscriptionTier.free) {
+  SubscriptionTierNotifier() : super(SubscriptionTier.free) {
     _load();
   }
 
   Future<void> _load() async {
-    final tier = await _service.currentTier();
-    if (mounted) state = tier;
+    // Load tier from Supabase user_subscriptions table
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) return;
+
+      final row = await client
+          .from('user_subscriptions')
+          .select('tier, expires_at')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (row == null) return;
+
+      final expiresAt = row['expires_at'] != null
+          ? DateTime.tryParse(row['expires_at'] as String)
+          : null;
+
+      if (expiresAt != null && expiresAt.isBefore(DateTime.now())) {
+        if (mounted) state = SubscriptionTier.free;
+        return;
+      }
+
+      final tier = _parseTier(row['tier'] as String?);
+      if (mounted) state = tier;
+    } catch (_) {
+      // On error, keep current state (free by default)
+    }
   }
 
   Future<void> refresh() async {
-    final tier = await _service.currentTier();
+    await _load();
+  }
+
+  /// Called after a successful Pesapal payment.
+  void setTier(SubscriptionTier tier) {
     if (mounted) state = tier;
   }
 
-  /// Called after a successful external payment (Flutterwave / M-Pesa).
-  void setTier(SubscriptionTier tier) {
-    if (mounted) state = tier;
+  SubscriptionTier _parseTier(String? value) {
+    switch (value) {
+      case 'pro':
+        return SubscriptionTier.pro;
+      case 'starter':
+        return SubscriptionTier.starter;
+      default:
+        return SubscriptionTier.free;
+    }
   }
 }
 

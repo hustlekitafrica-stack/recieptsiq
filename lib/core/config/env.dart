@@ -24,10 +24,6 @@ class Env {
   /// so only a Supabase connection (and a signed-in user) is required.
   static bool get canScanForReal => hasSupabase;
 
-  /// RevenueCat Google/Android API key (publishable — safe in binary).
-  static String get revenueCatGoogleKey => _get('REVENUECAT_GOOGLE_KEY');
-  static bool get hasRevenueCat => revenueCatGoogleKey.isNotEmpty;
-
   /// OneSignal App ID (publishable — safe in binary).
   static String get oneSignalAppId => _get('ONESIGNAL_APP_ID');
   static bool get hasOneSignal => oneSignalAppId.isNotEmpty;

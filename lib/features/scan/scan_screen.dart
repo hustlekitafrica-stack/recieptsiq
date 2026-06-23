@@ -369,6 +369,10 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                           label: 'Auto-extraction'),
                     ],
                   ),
+                  const SizedBox(height: 24),
+                  // ── Scan countdown ───────────────────────────────────────
+                  const _ScanCountdown(),
+                  const SizedBox(height: 24),
                   const Spacer(),
                   // ── Primary: document scanner ──────────────────────────
                   FilledButton.icon(
@@ -428,6 +432,96 @@ class _FeatureChip extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ScanCountdown extends ConsumerWidget {
+  const _ScanCountdown();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final usageLoaded = ref.watch(usageServiceProvider) != null;
+    final canScan = ref.watch(canScanProvider);
+    final tier = ref.watch(subscriptionTierProvider);
+    final caps = ref.watch(tierCapabilitiesProvider);
+    
+    User? user;
+    try { user = Supabase.instance.client.auth.currentUser; } catch (_) {}
+    final isAnon = user == null || user.isAnonymous;
+
+    // Show loading state while SharedPreferences loads
+    if (!usageLoaded) {
+      return const Text(
+        'Loading...',
+        style: TextStyle(
+          fontSize: 13,
+          color: Color(0xFF94A3B8),
+        ),
+        textAlign: TextAlign.center,
+      );
+    }
+
+    // Guest (anonymous) - lifetime counter
+    if (isAnon) {
+      final guestScansUsed = ref.watch(guestScansUsedProvider);
+      final remaining = SubscriptionConfig.guestMaxScans - guestScansUsed;
+      
+      if (remaining <= 0) {
+        return const Text(
+          'You have exhausted your free scans',
+          style: TextStyle(
+            fontSize: 13,
+            color: Color(0xFF94A3B8),
+          ),
+          textAlign: TextAlign.center,
+        );
+      }
+      
+      return Text(
+        '$guestScansUsed/${SubscriptionConfig.guestMaxScans} scans used',
+        style: const TextStyle(
+          fontSize: 13,
+          color: Color(0xFF94A3B8),
+        ),
+        textAlign: TextAlign.center,
+      );
+    }
+
+    // Registered users - monthly counter
+    if (tier == SubscriptionTier.pro) {
+      return const Text(
+        'Unlimited scans',
+        style: TextStyle(
+          fontSize: 13,
+          color: Color(0xFF94A3B8),
+        ),
+        textAlign: TextAlign.center,
+      );
+    }
+
+    final scansThisMonth = ref.watch(scansThisMonthProvider);
+    final maxScans = caps.maxScansPerMonth;
+    final remaining = maxScans - scansThisMonth;
+
+    if (remaining <= 0) {
+      return const Text(
+        'You have exhausted your free scans',
+        style: TextStyle(
+          fontSize: 13,
+          color: Color(0xFF94A3B8),
+        ),
+        textAlign: TextAlign.center,
+      );
+    }
+
+    return Text(
+      '$scansThisMonth/$maxScans scans this month',
+      style: const TextStyle(
+        fontSize: 13,
+        color: Color(0xFF94A3B8),
+      ),
+      textAlign: TextAlign.center,
     );
   }
 }

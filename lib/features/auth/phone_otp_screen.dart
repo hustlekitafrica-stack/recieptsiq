@@ -2,22 +2,46 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../app/subscription_provider.dart';
 import '../../core/services/notification_service.dart';
 import '../../data/models/subscription_tier.dart';
+import '../../data/repositories/supabase_receipt_repository.dart';
 
-class PhoneOtpScreen extends StatefulWidget {
+class PhoneOtpScreen extends ConsumerWidget {
   final String email;
   final bool isUpgrade;
   const PhoneOtpScreen({super.key, required this.email, this.isUpgrade = false});
 
   @override
-  State<PhoneOtpScreen> createState() => _PhoneOtpScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    return _PhoneOtpScreenInternal(
+      email: email,
+      isUpgrade: isUpgrade,
+      ref: ref,
+    );
+  }
 }
 
-class _PhoneOtpScreenState extends State<PhoneOtpScreen> {
+class _PhoneOtpScreenInternal extends StatefulWidget {
+  final String email;
+  final bool isUpgrade;
+  final WidgetRef ref;
+
+  const _PhoneOtpScreenInternal({
+    required this.email,
+    required this.isUpgrade,
+    required this.ref,
+  });
+
+  @override
+  State<_PhoneOtpScreenInternal> createState() => _PhoneOtpScreenState();
+}
+
+class _PhoneOtpScreenState extends State<_PhoneOtpScreenInternal> {
   static const _green  = Color(0xFF25D366);
   static const _digits = 6;
   static const _resend = 60;
@@ -26,6 +50,7 @@ class _PhoneOtpScreenState extends State<PhoneOtpScreen> {
   final _focus = FocusNode();
 
   bool    _loading     = false;
+  bool    _migrating   = false;
   String? _error;
   int     _secondsLeft = _resend;
   Timer?  _timer;
@@ -55,7 +80,10 @@ class _PhoneOtpScreenState extends State<PhoneOtpScreen> {
     setState(() { _loading = true; _error = null; });
     try {
       if (widget.isUpgrade) {
-        await _sb.auth.updateUser(UserAttributes(email: widget.email));
+        await _sb.auth.signInWithOtp(
+          email: widget.email,
+          shouldCreateUser: true,
+        );
       } else {
         await _sb.auth.signInWithOtp(
           email: widget.email,
@@ -75,17 +103,50 @@ class _PhoneOtpScreenState extends State<PhoneOtpScreen> {
   Future<void> _verify() async {
     if (!_ready) return;
     setState(() { _loading = true; _error = null; });
+
+    // Store old user ID before verification if upgrading from guest
+    final oldUserId = widget.isUpgrade ? _sb.auth.currentUser?.id : null;
+
     try {
       await _sb.auth.verifyOTP(
         email: widget.email,
         token: _otp,
-        type: widget.isUpgrade ? OtpType.emailChange : OtpType.email,
+        type: OtpType.email,
       );
+
       // Tag device with real user identity for push notification targeting.
       final user = _sb.auth.currentUser;
       if (user != null) {
         await NotificationService.tagUser(user, SubscriptionTier.free);
       }
+
+      // If this was a guest upgrade and the user ID changed, migrate data
+      if (widget.isUpgrade && oldUserId != null && user != null && user.id != oldUserId) {
+        setState(() { _loading = false; _migrating = true; });
+        try {
+          final repo = SupabaseReceiptRepository(_sb);
+          await repo.migrateGuestData(oldUserId, user.id);
+        } catch (e) {
+          // Log migration error but don't block login
+          print('Failed to migrate guest data: $e');
+        }
+      }
+
+      // Reset scan counters after successful account creation/upgrade
+      final usageService = widget.ref.read(usageServiceProvider);
+      if (usageService != null) {
+        // Log pre-reset state
+        final oldGuestScans = usageService.guestScansUsed;
+        final oldMonthlyScans = usageService.scansThisMonth;
+        print('[ScanCounterReset] Pre-reset - Guest scans: $oldGuestScans, Monthly scans: $oldMonthlyScans, isUpgrade: ${widget.isUpgrade}');
+
+        // Clear all counters (both guest lifetime and monthly)
+        await usageService.clearAll();
+
+        // Log post-reset state
+        print('[ScanCounterReset] Post-reset - Guest scans: ${usageService.guestScansUsed}, Monthly scans: ${usageService.scansThisMonth}');
+      }
+
       if (mounted) context.go('/dashboard');
     } on AuthException catch (e) {
       if (mounted) {
@@ -179,7 +240,7 @@ class _PhoneOtpScreenState extends State<PhoneOtpScreen> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: _ready ? _verify : null,
+                  onPressed: (_ready && !_migrating) ? _verify : null,
                   style: FilledButton.styleFrom(
                     backgroundColor: _green,
                     disabledBackgroundColor: _green.withValues(alpha: 0.4),
@@ -193,13 +254,33 @@ class _PhoneOtpScreenState extends State<PhoneOtpScreen> {
                           height: 20,
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2.5))
-                      : const Text(
-                          'Verify email',
-                          style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white),
-                        ),
+                      : _migrating
+                          ? const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white, strokeWidth: 2.5),
+                                ),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Transferring your receipts...',
+                                  style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white),
+                                ),
+                              ],
+                            )
+                          : const Text(
+                              'Verify email',
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white),
+                            ),
                 ),
               ),
 

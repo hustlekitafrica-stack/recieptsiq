@@ -52,8 +52,50 @@ serve(async (req) => {
 
     const { tier, billing_period = 'monthly' } = await req.json();
     const tierPrices = PRICES[tier] ?? PRICES['starter'];
-    const price = billing_period === 'yearly' ? tierPrices.yearly : tierPrices.monthly;
+    let price = billing_period === 'yearly' ? tierPrices.yearly : tierPrices.monthly;
     const frequency = billing_period === 'yearly' ? 'ANNUAL' : 'MONTHLY';
+
+    // Check for existing subscription (upgrade scenario)
+    const { data: existingSub } = await supabase
+      .from('user_subscriptions')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+
+    let isUpgrade = false;
+    let oldTier = null;
+    let proratedCredit = 0;
+
+    if (existingSub && existingSub.tier !== tier && existingSub.expires_at) {
+      const now = new Date();
+      const expiryDate = new Date(existingSub.expires_at);
+      
+      // Only calculate proration if subscription is still active
+      if (expiryDate > now) {
+        isUpgrade = true;
+        oldTier = existingSub.tier;
+        
+        // Calculate remaining days
+        const remainingMs = expiryDate.getTime() - now.getTime();
+        const remainingDays = remainingMs / (1000 * 60 * 60 * 24);
+        
+        // Get old tier price
+        const oldTierPrices = PRICES[oldTier] ?? PRICES['starter'];
+        const oldPrice = existingSub.billing_period === 'yearly' 
+          ? oldTierPrices.yearly 
+          : oldTierPrices.monthly;
+        
+        // Calculate prorated credit
+        const totalPeriodDays = existingSub.billing_period === 'yearly' ? 365 : 30;
+        proratedCredit = Math.floor((remainingDays / totalPeriodDays) * oldPrice.amount);
+        
+        // Adjust payment amount (ensure minimum of 0)
+        price = {
+          amount: Math.max(0, price.amount - proratedCredit),
+          currency: price.currency,
+        };
+      }
+    }
 
     const token = await getPesapalToken();
     const orderRef = `receiptiq-${user.id.slice(0, 8)}-${Date.now()}`;
@@ -72,7 +114,7 @@ serve(async (req) => {
         id: orderRef,
         currency: price.currency,
         amount: price.amount,
-        description: `ReceiptIQ ${tier} subscription (${billing_period})`,
+        description: `ReceiptIQ ${tier} subscription (${billing_period})${isUpgrade ? ' - Upgrade' : ''}`,
         callback_url: PESAPAL_CALLBACK_URL,
         notification_id: ipnData.ipn_id,
         billing_address: { email_address: user.email ?? `${user.id}@receiptiq.app` },
@@ -101,10 +143,18 @@ serve(async (req) => {
         order_tracking_id: orderData.order_tracking_id,
         billing_period,
         frequency,
+        is_upgrade: isUpgrade,
+        old_tier: oldTier,
+        prorated_credit: proratedCredit,
       },
     });
 
-    return new Response(JSON.stringify({ checkoutUrl: orderData.redirect_url }), {
+    return new Response(JSON.stringify({ 
+      checkoutUrl: orderData.redirect_url,
+      isUpgrade,
+      proratedCredit,
+      adjustedAmount: price.amount,
+    }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {

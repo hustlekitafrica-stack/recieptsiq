@@ -759,9 +759,6 @@ class _DualHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final savings = (analytics.lastMonthSpend - analytics.monthlySpend)
-        .clamp(0.0, double.infinity);
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -773,83 +770,42 @@ class _DualHero extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(24),
       ),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('This month',
-                      style: TextStyle(color: Colors.white70, fontSize: 13)),
-                  const SizedBox(height: 4),
-                  Text(
-                    Money(analytics.monthlySpend, currency).format(),
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 6),
-                  if (analytics.trendPercent != null)
-                    Row(
-                      children: [
-                        Icon(
-                          (analytics.trendPercent ?? 0) >= 0
-                              ? Icons.trending_up
-                              : Icons.trending_down,
-                          color: Colors.white70,
-                          size: 14,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${(analytics.trendPercent ?? 0) >= 0 ? '+' : ''}${analytics.trendPercent!.toStringAsFixed(0)}% vs last month',
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 11),
-                        ),
-                      ],
-                    )
-                  else
-                    const Text('No prior month',
-                        style: TextStyle(color: Colors.white38, fontSize: 11)),
-                ],
-              ),
-            ),
-            Container(
-              width: 1,
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              color: Colors.white24,
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('You saved',
-                      style: TextStyle(color: Colors.white70, fontSize: 13)),
-                  const SizedBox(height: 4),
-                  Text(
-                    Money(savings, currency).format(),
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    savings > 0
-                        ? 'vs last month 🎉'
-                        : analytics.lastMonthSpend == 0
-                            ? 'No data to compare yet'
-                            : 'Try to reduce costs',
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 11),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('This month',
+              style: TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text(
+            Money(analytics.monthlySpend, currency).format(),
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 26,
+                fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          if (analytics.trendPercent != null)
+            Row(
+              children: [
+                Icon(
+                  (analytics.trendPercent ?? 0) >= 0
+                      ? Icons.trending_up
+                      : Icons.trending_down,
+                  color: Colors.white70,
+                  size: 14,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${(analytics.trendPercent ?? 0) >= 0 ? '+' : ''}${analytics.trendPercent!.toStringAsFixed(0)}% vs last month',
+                  style: const TextStyle(
+                      color: Colors.white70, fontSize: 11),
+                ),
+              ],
+            )
+          else
+            const Text('No prior month',
+                style: TextStyle(color: Colors.white38, fontSize: 11)),
+        ],
       ),
     );
   }
@@ -1004,14 +960,7 @@ class _HealthScoreCard extends ConsumerWidget {
               )
             else
               GestureDetector(
-                onTap: () {
-                  bool isAnon = true;
-                  try {
-                    final u = Supabase.instance.client.auth.currentUser;
-                    isAnon = u == null || u.isAnonymous;
-                  } catch (_) {}
-                  context.push(isAnon ? '/auth' : '/paywall');
-                },
+                onTap: () => context.push('/paywall'),
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),

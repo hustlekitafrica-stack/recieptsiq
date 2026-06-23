@@ -6,16 +6,6 @@ class SubscriptionConfig {
   // ── Guest scan cap (anonymous users, lifetime, hidden from UI) ───────────
   static const guestMaxScans = 2;
 
-  // ── RevenueCat product IDs (Google Play) ─────────────────────────────────
-  static const rcStarterMonthly = 'receiptiq_starter_monthly';
-  static const rcProMonthly = 'receiptiq_pro_monthly';
-  static const rcStarterYearly = 'receiptiq_starter_yearly';
-  static const rcProYearly = 'receiptiq_pro_yearly';
-
-  // ── RevenueCat entitlement IDs ────────────────────────────────────────────
-  static const entitlementStarter = 'starter';
-  static const entitlementPro = 'pro';
-
   // ── Tier capabilities ─────────────────────────────────────────────────────
   static const free = TierCapabilities(
     tier: SubscriptionTier.free,

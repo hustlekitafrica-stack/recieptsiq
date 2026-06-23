@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -141,6 +143,78 @@ class SupabaseReceiptRepository implements ReceiptRepository {
   Future<void> saveYearlyReviewCache(int year, YearlyReview review) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('yearly_cache_${_uid}_$year', jsonEncode(review.toJson()));
+  }
+
+  // ---- Guest Data Migration ----
+
+  /// Migrates all receipts and storage images from an anonymous guest user
+  /// to a real authenticated user. Called when a guest signs in to an existing account.
+  Future<void> migrateGuestData(String oldUserId, String newUserId) async {
+    // 1. Update all receipts from old user ID to new user ID
+    final receipts = await _db
+        .from('receipts')
+        .select('id')
+        .eq('user_id', oldUserId);
+
+    for (final receipt in receipts) {
+      final receiptId = receipt['id'] as String;
+      await _db
+          .from('receipts')
+          .update({'user_id': newUserId})
+          .eq('id', receiptId);
+      
+      await _db
+          .from('line_items')
+          .update({'user_id': newUserId})
+          .eq('receipt_id', receiptId);
+    }
+
+    // 2. Transfer storage images from old folder to new folder
+    try {
+      final oldPrefix = '$oldUserId/';
+      final newPrefix = '$newUserId/';
+      
+      // List all files in the old user's folder
+      final files = await _db.storage.from(_bucket).list(path: oldPrefix);
+      
+      for (final file in files) {
+        if (file.name.isEmpty) continue;
+        final oldPath = '$oldPrefix${file.name}';
+        final newPath = '$newPrefix${file.name}';
+        
+        try {
+          // Download the file from old location
+          final fileData = await _db.storage.from(_bucket).download(oldPath);
+          
+          // Convert bytes to temporary file
+          final tempDir = await getTemporaryDirectory();
+          final tempFile = File('${tempDir.path}/${file.name}');
+          await tempFile.writeAsBytes(fileData);
+          
+          // Upload to new location
+          await _db.storage.from(_bucket).upload(
+                newPath,
+                tempFile,
+                fileOptions: const FileOptions(upsert: true),
+              );
+          
+          // Delete temporary file
+          await tempFile.delete();
+          
+          // Delete from old location
+          await _db.storage.from(_bucket).remove([oldPath]);
+        } catch (e) {
+          // Log but continue with other files if one fails
+          print('Failed to migrate storage file $oldPath: $e');
+        }
+      }
+    } catch (e) {
+      print('Failed to list or migrate storage files: $e');
+    }
+
+    // 3. Clear guest-specific SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('usage_guest_scans');
   }
 
   // ---- Helpers ----

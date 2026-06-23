@@ -125,7 +125,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
           const SnackBar(content: Text('Receipt saved')),
         );
       }
-      if (mounted) context.go('/receipts');
+      if (mounted) context.pushReplacement('/receipts');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -54,33 +54,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     }
   }
 
-  Future<void> _restore() async {
-    setState(() => _busy = true);
-    try {
-      final service = ref.read(subscriptionServiceProvider);
-      final tier = await service.restore();
-      if (!mounted) return;
-      ref.read(subscriptionTierProvider.notifier).setTier(tier);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            tier == SubscriptionTier.free
-                ? 'No active subscription found.'
-                : 'Subscription restored!',
-          ),
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Restore failed: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final currentTier = ref.watch(subscriptionTierProvider);
@@ -88,12 +61,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Choose your plan'),
-        actions: [
-          TextButton(
-            onPressed: _busy ? null : _restore,
-            child: const Text('Restore'),
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
