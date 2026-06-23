@@ -10,7 +10,9 @@ import '../../core/theme/app_theme.dart';
 import '../../data/models/subscription_tier.dart';
 
 class PaywallScreen extends ConsumerStatefulWidget {
-  const PaywallScreen({super.key});
+  final SubscriptionTier? defaultTier;
+
+  const PaywallScreen({super.key, this.defaultTier});
 
   @override
   ConsumerState<PaywallScreen> createState() => _PaywallScreenState();
@@ -20,6 +22,12 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   SubscriptionTier _selected = SubscriptionTier.starter;
   BillingPeriod _billingPeriod = BillingPeriod.monthly;
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.defaultTier ?? SubscriptionTier.starter;
+  }
 
   Future<void> _purchase() async {
     // Anonymous users must create an account before paying.

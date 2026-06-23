@@ -152,7 +152,10 @@ final _routes = <RouteBase>[
     GoRoute(
       path: '/paywall',
       parentNavigatorKey: _rootKey,
-      builder: (c, s) => const PaywallScreen(),
+      builder: (c, s) {
+        final defaultTier = s.extra as SubscriptionTier?;
+        return PaywallScreen(defaultTier: defaultTier);
+      },
     ),
     GoRoute(
       path: '/paywall/pesapal',

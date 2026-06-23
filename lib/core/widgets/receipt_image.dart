@@ -3,15 +3,6 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
-/// Cache manager for receipt images with optimized settings
-final _receiptCacheManager = CacheManager(
-  Config(
-    'receiptImages',
-    stalePeriod: const Duration(days: 7),
-    maxNrOfCacheObjects: 200,
-  ),
-);
-
 /// Renders a receipt image whether it's a local file path or a remote URL
 /// (e.g. a Supabase Storage signed URL).
 class ReceiptImage extends StatelessWidget {
@@ -41,7 +32,6 @@ class ReceiptImage extends StatelessWidget {
             fadeInDuration: const Duration(milliseconds: 300),
             placeholder: (_, __) => _ShimmerPlaceholder(height: height),
             errorWidget: (_, __, ___) => _placeholder(),
-            cacheManager: _receiptCacheManager,
           )
         : (File(src).existsSync()
             ? Image.file(File(src),

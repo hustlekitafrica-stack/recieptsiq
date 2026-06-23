@@ -69,7 +69,7 @@ class _LockedOverlay extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed: () => context.push('/paywall'),
+              onPressed: () => context.push('/paywall', extra: requiredTier),
               icon: const Icon(Icons.rocket_launch_outlined, size: 18),
               label: Text('Upgrade to $tierName'),
               style: FilledButton.styleFrom(
